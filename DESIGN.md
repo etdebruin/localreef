@@ -28,7 +28,7 @@ having to know or care.
 | Shell | Electron |
 | Windowing | Canvas-first (in-window frames) with pop-out to native |
 | Frames | `<iframe>` on per-app origins |
-| Runtimes (v1) | Static folders + Node servers |
+| Runtimes | Static folders + any server (`run` is a shell command with `$PORT`) |
 | AI | Generation ships in v1 |
 
 **Why Electron over Tauri.** We're spawning Node child processes regardless, so the
@@ -87,12 +87,21 @@ That makes resolution a hard guarantee rather than a DNS behavior we're hoping f
 ### Gateway auth
 
 The gateway binds loopback only, but any local process can send a request with a
-`Host:` header. An iframe can't attach custom headers to a navigation, so:
+`Host:` header, so requests need a credential.
 
-1. Desktop renderer navigates the frame to `notes.desktop.localhost:PORT/?__desktop=<token>`
-2. Gateway validates, sets an `HttpOnly` cookie scoped to `.desktop.localhost`, 302s to
-   the clean URL
-3. Every subsequent request carries the cookie; other processes don't have it
+**The cookie handshake this section originally specified does not work.** The plan
+was: navigate to `?__desktop=<token>`, set an `HttpOnly` cookie, redirect to a clean
+URL. The cookie is set correctly — and then never sent back. An app iframe is a
+*cross-site* context relative to the `file://` renderer, and `SameSite=Lax` cookies
+are withheld on cross-site nested-frame navigations. Every app 401s on the redirect.
+
+What works: Electron attaches an `x-desktop-token` header to every request bound for
+`*.desktop.localhost` via `webRequest.onBeforeSendHeaders`, scoped by URL filter so
+it cannot leak elsewhere, and the gateway strips it before forwarding so app servers
+never see it. The cookie and query-param paths remain as fallbacks.
+
+This was caught only by an Electron harness (`test/electron/iframe-auth.mjs`); the
+unit tests set `Cookie` directly and so bypassed browser policy entirely.
 
 Origin persists across sessions, so app `localStorage` survives. Token rotates per
 Local Desktop launch.
@@ -166,9 +175,14 @@ persisted to SQLite, so your desk looks the way you left it.
 Three problems worth naming up front, because they're where naïve implementations fall
 over:
 
-**Dragging.** The iframe swallows pointer events mid-drag. Standard fix: a transparent
-full-canvas shield div that appears on drag/resize start and disappears on end, plus
-pointer capture on the titlebar.
+**Dragging.** The iframe swallows pointer events mid-drag. Fix: a transparent
+full-canvas shield div that appears on drag/resize start and disappears on end, with
+window-level pointer listeners.
+
+Pointer capture on the titlebar was tried and **removed**. It silently failed to
+bind, so drags stopped working entirely, and it also routed `pointerup` away from the
+close button — which is why the X did nothing. A drag must additionally ignore
+`pointerdown` originating on a control inside the handle.
 
 **Focus.** Clicking into a cross-origin iframe doesn't tell the parent anything, so
 z-order can't update. Unfocused windows get a transparent click-catcher; the first
