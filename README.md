@@ -145,7 +145,7 @@ cookie, so other processes on your machine can't reach your apps by forging a
 ## Development
 
 ```
-npm test                # 169 tests, including end-to-end against the real samples
+npm test                # 177 tests, including end-to-end against the real samples
 npm run lint
 npm run test:electron   # iframe auth in a real Electron window
 npm run test:electron:ui # window drag/close via real Chromium input events
