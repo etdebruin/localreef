@@ -11,3 +11,6 @@ apps/*/.venv/
 # Local overrides; the committed defaults are in package.json / eslint.config.js
 .env
 .env.local
+
+# Vite fixture is generated on demand by npm run test:vite
+test/vite/fixture/

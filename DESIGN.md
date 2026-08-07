@@ -132,7 +132,11 @@ uses `server.port` (default 5173). Next.js honors it. So we run both:
 2. Scan stdout for a printed URL (`Local: http://localhost:5173`) and adopt whatever
    port it announces
 
-Whichever resolves first wins. 30s timeout, because a cold `npm install` may run
+Whichever resolves first wins. Both are probed on **both loopback families** —
+a server told to listen on `localhost` binds whichever the resolver returns
+first, and on modern macOS that is `::1`. Vite does this, so probing only
+127.0.0.1 makes it look permanently dead. The family that answered is recorded
+and the gateway proxies to it. 30s timeout, because a cold `npm install` may run
 first.
 
 ### Two environment gotchas worth designing around now

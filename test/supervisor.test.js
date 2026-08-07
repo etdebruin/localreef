@@ -30,6 +30,16 @@ const s = http.createServer((_, res) => res.end('ok'))
 s.listen(process.env.PORT, '127.0.0.1', () => console.log('up'))
 `
 
+// Binds IPv6 loopback only — what any server listening on "localhost" does on
+// a modern macOS, Vite included.
+const IPV6_ONLY = `
+const http = require('http')
+const s = http.createServer((_, res) => res.end('ok'))
+s.listen(0, '::1', () => {
+  console.log('  ➜  Local:   http://localhost:' + s.address().port + '/')
+})
+`
+
 const CRASHES = `
 console.error('boom: could not find module "nope"')
 process.exit(1)
@@ -73,6 +83,34 @@ test('supervisor', async (t) => {
     })
     assert.equal(state.status, 'ready')
     assert.ok(state.port > 0)
+  })
+
+  await t.test('reaches a server bound to IPv6 loopback only', async () => {
+    const dir = await appDir('ipv6', { 'server.js': IPV6_ONLY })
+    dirs.push(dir)
+    const state = await supervisor.ensureStarted({
+      id: 'ipv6only',
+      type: 'server',
+      dir,
+      run: 'node server.js',
+    })
+    assert.equal(state.status, 'ready', state.error ?? '')
+    assert.ok(state.port > 0)
+    // The gateway has to know which family to proxy to.
+    assert.equal(state.host, '::1')
+  })
+
+  await t.test('records the IPv4 host for a server bound to 127.0.0.1', async () => {
+    const dir = await appDir('ipv4', { 'server.js': HONOURS_PORT })
+    dirs.push(dir)
+    const state = await supervisor.ensureStarted({
+      id: 'ipv4only',
+      type: 'server',
+      dir,
+      run: 'node server.js',
+    })
+    assert.equal(state.status, 'ready')
+    assert.equal(state.host, '127.0.0.1')
   })
 
   await t.test('reports a crash with the stderr that caused it', async () => {

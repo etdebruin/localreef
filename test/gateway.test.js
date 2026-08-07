@@ -56,8 +56,17 @@ test('gateway', async (t) => {
   await new Promise((r) => backend.listen(0, '127.0.0.1', r))
   backendPort = backend.address().port
 
+  // A backend on IPv6 loopback, as Vite binds.
+  const backend6 = http.createServer((req, res) => {
+    res.writeHead(200, { 'content-type': 'text/plain' })
+    res.end('ipv6 backend saw ' + req.url)
+  })
+  await new Promise((r) => backend6.listen(0, '::1', r))
+  const backend6Port = backend6.address().port
+
   const apps = {
     notes: { id: 'notes', type: 'static', root: dir },
+    six: { id: 'six', type: 'server', status: 'ready', port: backend6Port, host: '::1' },
     chart: { id: 'chart', type: 'server', status: 'ready', port: backendPort },
     slow: { id: 'slow', type: 'server', status: 'starting' },
   }
@@ -72,6 +81,8 @@ test('gateway', async (t) => {
     for (const socket of backendSockets) socket.destroy()
     backend.closeAllConnections?.()
     await new Promise((r) => backend.close(r))
+    backend6.closeAllConnections?.()
+    await new Promise((r) => backend6.close(r))
     await fs.rm(dir, { recursive: true, force: true })
     await fs.rm(path.join(path.dirname(dir), 'ld-outside-secret'), { force: true })
   })
@@ -171,6 +182,12 @@ test('gateway', async (t) => {
     const res = await request(port, H('chart'), '/api/data?q=1', { headers: AUTHED })
     assert.equal(res.status, 200)
     assert.equal(res.body, 'backend saw GET /api/data?q=1')
+  })
+
+  await t.test('proxies an app bound to IPv6 loopback', async () => {
+    const res = await request(port, H('six'), '/hello', { headers: AUTHED })
+    assert.equal(res.status, 200)
+    assert.equal(res.body, 'ipv6 backend saw /hello')
   })
 
   await t.test('reports 503 while a node app is still starting', async () => {

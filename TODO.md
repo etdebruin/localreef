@@ -19,6 +19,11 @@ the ledger.
 - **Any-language servers.** `type: "server"` is a shell command with `$PORT`, so
   the "Python runtime" item from the original plan is closed — Python, Go, or a
   binary all work today.
+- **Vite verified end to end** (`npm run test:vite`): page proxied, HMR
+  WebSocket connected, live `full-reload` delivered after a file edit. Neither
+  feared risk materialised — no host-check rejection, and the HMR client's URL
+  survives proxying. Two *unforeseen* bugs did: Vite binds IPv6 loopback only,
+  and `host` was not threaded to the proxy.
 
 ---
 
@@ -28,14 +33,6 @@ Things asserted in the design that have not actually been demonstrated. These
 matter more than the feature gaps below, because they could invalidate a
 decision rather than just leave one unmade.
 
-- **Vite has never been run through the gateway.** The whole reason the gateway
-  is HTTP rather than an `app://` protocol is that Vite's HMR needs a WebSocket.
-  The upgrade relay is proven end to end — but against `apps/clock`, which
-  hand-rolls its WebSocket. A real Vite app was planned for M1 and swapped out
-  to avoid an `npm install` in the test path. Until one runs, two risks are
-  open: Vite's `server.allowedHosts` may reject the forwarded `Host` header, and
-  its HMR client may build a WebSocket URL that does not survive proxying.
-  **This should be the next thing done.**
 - **Nobody has looked at the desktop.** All UI verification has been through
   Electron harnesses and log inspection; `screencapture` needs a permission the
   agent shell lacks. Layout, spacing, and visual polish are unreviewed.
@@ -93,5 +90,6 @@ decision rather than just leave one unmade.
   Linked projects already carry their own `desktop.json`; the list itself does not.
 - **`type: "node"` is a legacy alias** normalised in `manifest.js`. Harmless, but
   it can go once nothing depends on it.
-- **`npm test` is 177 tests and growing.** The two Electron suites must be run
-  separately (`test:electron`, `test:electron:ui`) and are easy to forget in CI.
+- **`npm test` is 180 tests and growing.** Three suites must be run separately
+  (`test:electron`, `test:electron:ui`, `test:vite`) and are easy to forget in
+  CI — they are also the ones that have caught the worst bugs.

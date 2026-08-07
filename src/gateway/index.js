@@ -100,7 +100,8 @@ export function createGateway({ token, lookup }) {
   function proxy(req, res, app) {
     const upstream = http.request(
       {
-        host: '127.0.0.1',
+        // Whichever loopback family the app bound; see supervisor readiness.
+        host: app.host ?? '127.0.0.1',
         port: app.port,
         path: req.url,
         method: req.method,
@@ -193,7 +194,7 @@ export function createGateway({ token, lookup }) {
     if (!upgradeAuthed) return socket.destroy()
 
     const upstream = http.request({
-      host: '127.0.0.1',
+      host: app.host ?? '127.0.0.1',
       port: app.port,
       path: req.url,
       method: req.method,

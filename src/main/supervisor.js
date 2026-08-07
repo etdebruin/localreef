@@ -53,9 +53,14 @@ function freePort() {
   })
 }
 
-function canConnect(port, timeoutMs = 500) {
+// Both loopback families. A server told to listen on "localhost" binds
+// whichever the resolver returns first, and on modern macOS that is ::1 —
+// Vite included. Probing only 127.0.0.1 makes those servers look dead forever.
+const LOOPBACK_HOSTS = ['127.0.0.1', '::1']
+
+function canConnect(host, port, timeoutMs = 500) {
   return new Promise((resolve) => {
-    const socket = net.connect({ host: '127.0.0.1', port })
+    const socket = net.connect({ host, port })
     const finish = (ok) => {
       socket.destroy()
       resolve(ok)
@@ -74,6 +79,7 @@ export function createSupervisor({ onChange = () => {}, readyTimeoutMs = 30000 }
   const publicState = (s) => ({
     status: s.status,
     port: s.port ?? null,
+    host: s.host ?? null,
     logs: s.logs ?? [],
     error: s.error,
   })
@@ -88,7 +94,7 @@ export function createSupervisor({ onChange = () => {}, readyTimeoutMs = 30000 }
 
   function get(id) {
     const s = states.get(id)
-    return s ? publicState(s) : { status: 'stopped', port: null, logs: [] }
+    return s ? publicState(s) : { status: 'stopped', port: null, host: null, logs: [] }
   }
 
   async function start(app) {
@@ -99,7 +105,7 @@ export function createSupervisor({ onChange = () => {}, readyTimeoutMs = 30000 }
     const logs = []
     let announcedPort = null
 
-    setState(app.id, { status: 'starting', port: null, logs, error: undefined })
+    setState(app.id, { status: 'starting', port: null, host: null, logs, error: undefined })
 
     const proc = spawn(app.run, {
       cwd: app.dir,
@@ -149,14 +155,19 @@ export function createSupervisor({ onChange = () => {}, readyTimeoutMs = 30000 }
 
     while (Date.now() < deadline) {
       if (exited) {
-        return setState(app.id, { status: 'crashed', port: null, proc: null, error: exitInfo })
+        return setState(app.id, { status: 'crashed', port: null, host: null, proc: null, error: exitInfo })
       }
 
       // The announced port takes priority: if the server told us where it is,
       // that is authoritative over the port we hoped it would use.
       for (const port of [announcedPort, assignedPort]) {
-        if (port && (await canConnect(port))) {
-          return setState(app.id, { status: 'ready', port, error: undefined })
+        if (!port) continue
+        for (const host of LOOPBACK_HOSTS) {
+          if (await canConnect(host, port)) {
+            // Record the host too — the gateway has to proxy to the same
+            // family the app actually bound.
+            return setState(app.id, { status: 'ready', port, host, error: undefined })
+          }
         }
       }
 
@@ -167,6 +178,7 @@ export function createSupervisor({ onChange = () => {}, readyTimeoutMs = 30000 }
     return setState(app.id, {
       status: 'crashed',
       port: null,
+      host: null,
       proc: null,
       error: `Timed out after ${Math.round(readyTimeoutMs / 1000)}s waiting for the server to listen`,
     })
@@ -175,7 +187,7 @@ export function createSupervisor({ onChange = () => {}, readyTimeoutMs = 30000 }
   async function ensureStarted(app) {
     // Static apps have nothing to spawn — the gateway serves them off disk.
     if (app.type === 'static') {
-      return publicState(setState(app.id, { status: 'ready', port: null, error: undefined }))
+      return publicState(setState(app.id, { status: 'ready', port: null, host: null, error: undefined }))
     }
 
     const current = states.get(app.id)
@@ -218,7 +230,7 @@ export function createSupervisor({ onChange = () => {}, readyTimeoutMs = 30000 }
       if (proc.exitCode === null && proc.signalCode === null) signal(proc, 'SIGKILL')
     }
 
-    setState(id, { status: 'stopped', port: null, proc: null, pending: null })
+    setState(id, { status: 'stopped', port: null, host: null, proc: null, pending: null })
   }
 
   async function stopAll() {

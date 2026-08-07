@@ -53,6 +53,7 @@ test('end to end', async (t) => {
         root: record.root,
         status: record.type === 'static' ? 'ready' : state.status,
         port: state.port,
+        host: state.host,
       }
     },
   })

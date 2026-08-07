@@ -2,7 +2,15 @@ import js from '@eslint/js'
 import globals from 'globals'
 
 export default [
-  { ignores: ['node_modules/**', 'apps/**/dist/**', 'apps/**/node_modules/**'] },
+  {
+    ignores: [
+      'node_modules/**',
+      'apps/**/dist/**',
+      'apps/**/node_modules/**',
+      // Generated on demand by `npm run test:vite`; browser code, not ours.
+      'test/vite/fixture/**',
+    ],
+  },
 
   {
     files: ['**/*.js'],

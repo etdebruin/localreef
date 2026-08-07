@@ -160,6 +160,7 @@ function lookupForGateway(id) {
     root: record.root,
     status: record.type === 'static' ? 'ready' : state.status,
     port: state.port,
+    host: state.host,
   }
 }
 

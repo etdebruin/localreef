@@ -6,10 +6,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 npm start                  # launch the desktop (Electron)
-npm test                   # 177 unit + integration tests
+npm test                   # 180 unit + integration tests
 npm run lint
 npm run test:electron      # iframe auth, needs a real Electron GUI
 npm run test:electron:ui   # window drag/close via real Chromium input events
+npm run test:vite          # real Vite through the gateway, incl. live HMR
 ```
 
 Run one test file: `node --test test/gateway.test.js`
@@ -78,6 +79,13 @@ counts it — so `server.close()` waits forever. The gateway tracks upgraded
 sockets in its own `Set`. Any new server in this repo that accepts upgrades
 needs the same treatment (see the backend fixture in `test/gateway.test.js`).
 
+**Servers may bind IPv6 loopback only.** `listen(port, 'localhost')` binds
+whichever family the resolver returns first, and on modern macOS that is `::1`.
+Vite does exactly this. Readiness therefore probes both `127.0.0.1` and `::1`,
+records which one answered as `state.host`, and **the gateway must proxy to that
+host** — any `lookup()` passed to `createGateway` has to thread `host` through
+alongside `port`, or a working app 502s.
+
 **Vite ignores `PORT`.** It uses `server.port` (default 5173); Next.js honours
 `PORT`. Readiness therefore runs two strategies concurrently — TCP probe on the
 assigned port, and sniffing stdout for an announced loopback port — and takes
@@ -110,6 +118,9 @@ plain suite structurally cannot**, and two shipped bugs prove it:
 - UI tests must drive `sendInputEvent`, never `element.click()`. A programmatic
   click dispatches straight to the element and skips the pointer sequence, so it
   passes happily while a button is broken by pointer routing.
+- `test:vite` runs a real Vite dev server. A hand-rolled WebSocket sample stood
+  in for it for a long time and hid two bugs: IPv6-only binding, and `host` not
+  being threaded to the proxy.
 
 Do not delete either suite as duplication.
 
