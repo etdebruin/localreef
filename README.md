@@ -167,16 +167,9 @@ works, not just the units.
 
 ## Status
 
-Milestone 1 is done: registry, supervisor, gateway, and a working desktop.
+Milestones 1–4 are done: registry, supervisor, gateway, the desktop, ⌘K
+generation, and Fix with AI. Apps in any language run via `type: "server"`, and
+projects anywhere on disk can be linked in place.
 
-Next up: the `⌘K` agent bar that generates a new app from a description, the
-`desktop.*` SDK bridge, and pop-out to native windows. See the build order at
-the end of [DESIGN.md](./DESIGN.md).
-
-Known gaps at this stage:
-
-- Window layout is not yet persisted between launches
-- Apps are served without their own CSP, so a generated app can still load
-  remote code
-- `keepAlive` is parsed but not enforced; closing a window stops a server app
-  immediately
+Outstanding work — including one unverified architectural claim worth reading
+before trusting the design — is tracked in [TODO.md](./TODO.md).

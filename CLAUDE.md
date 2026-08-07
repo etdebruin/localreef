@@ -29,8 +29,9 @@ by URL (`localhost:5173`). Click an icon and the app opens in a window; the
 shell owns starting servers and assigning ports.
 
 `DESIGN.md` holds the architecture and the reasoning behind each decision.
-`MANIFEST.md` is the app format spec. Read `DESIGN.md` before changing the
-gateway, supervisor, or window model.
+`MANIFEST.md` is the app format spec. `TODO.md` is the ledger of what is
+outstanding — including unverified claims, which is where to look first. Read
+`DESIGN.md` before changing the gateway, supervisor, or window model.
 
 ## Architecture
 
