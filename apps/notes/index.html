@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Notes</title>
+    <style>
+      :root { --line: #e4e6ec; --muted: #6b7280; --accent: #2563eb; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0; height: 100vh; display: flex; flex-direction: column;
+        font: 15px/1.6 -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+        color: #16181d; background: #fff;
+      }
+      header {
+        padding: 14px 18px; border-bottom: 1px solid var(--line);
+        display: flex; align-items: baseline; gap: 10px;
+      }
+      h1 { font-size: 15px; margin: 0; font-weight: 600; }
+      .count { color: var(--muted); font-size: 13px; }
+      form { display: flex; gap: 8px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+      input {
+        flex: 1; padding: 9px 12px; font: inherit;
+        border: 1px solid var(--line); border-radius: 8px;
+      }
+      input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+      button {
+        padding: 9px 14px; font: inherit; border: 0; border-radius: 8px;
+        background: var(--accent); color: #fff; cursor: pointer;
+      }
+      ul { list-style: none; margin: 0; padding: 8px 0; overflow: auto; flex: 1; }
+      li {
+        display: flex; align-items: center; gap: 10px;
+        padding: 9px 18px; border-bottom: 1px solid #f2f3f6;
+      }
+      li span { flex: 1; }
+      li button {
+        background: transparent; color: var(--muted);
+        font-size: 16px; padding: 2px 8px;
+      }
+      li button:hover { color: #dc2626; }
+      .empty { color: var(--muted); padding: 28px 18px; text-align: center; }
+      footer { padding: 10px 18px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Notes</h1>
+      <span class="count" id="count"></span>
+    </header>
+
+    <form id="form">
+      <input id="input" placeholder="Write a note…" autocomplete="off" />
+      <button type="submit">Add</button>
+    </form>
+
+    <ul id="list"></ul>
+
+    <footer id="origin"></footer>
+
+    <script>
+      const KEY = 'notes'
+      const listEl = document.getElementById('list')
+      const countEl = document.getElementById('count')
+      const form = document.getElementById('form')
+      const input = document.getElementById('input')
+
+      // Per-app origin means this localStorage is genuinely this app's alone.
+      const load = () => JSON.parse(localStorage.getItem(KEY) ?? '[]')
+      const save = (notes) => localStorage.setItem(KEY, JSON.stringify(notes))
+
+      function render() {
+        const notes = load()
+        countEl.textContent = notes.length ? `${notes.length} saved` : ''
+        listEl.replaceChildren()
+
+        if (!notes.length) {
+          const empty = document.createElement('div')
+          empty.className = 'empty'
+          empty.textContent = 'Nothing yet. Add a note — it persists across restarts.'
+          listEl.append(empty)
+          return
+        }
+
+        notes.forEach((note, i) => {
+          const li = document.createElement('li')
+          const span = document.createElement('span')
+          span.textContent = note
+          const del = document.createElement('button')
+          del.textContent = '×'
+          del.title = 'Delete'
+          del.addEventListener('click', () => {
+            const next = load()
+            next.splice(i, 1)
+            save(next)
+            render()
+          })
+          li.append(span, del)
+          listEl.append(li)
+        })
+      }
+
+      form.addEventListener('submit', (e) => {
+        e.preventDefault()
+        const text = input.value.trim()
+        if (!text) return
+        save([...load(), text])
+        input.value = ''
+        render()
+      })
+
+      document.getElementById('origin').textContent = `served from ${location.origin}`
+      render()
+    </script>
+  </body>
+</html>

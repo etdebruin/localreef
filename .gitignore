@@ -1,0 +1,13 @@
+node_modules/
+
+# Built output from linked or sample apps — never the source.
+apps/*/node_modules/
+apps/*/dist/
+apps/*/.venv/
+
+*.log
+.DS_Store
+
+# Local overrides; the committed defaults are in package.json / eslint.config.js
+.env
+.env.local

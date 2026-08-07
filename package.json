@@ -1,0 +1,24 @@
+{
+  "name": "local-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A desktop for local apps",
+  "type": "module",
+  "main": "src/main/index.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test 'test/**/*.test.js'",
+    "lint": "eslint .",
+    "test:electron": "electron test/electron/iframe-auth.mjs",
+    "test:electron:ui": "electron test/electron/window-controls.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.18.0",
+    "electron": "^43.3.0",
+    "eslint": "^9.18.0",
+    "globals": "^15.14.0"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.115.0"
+  }
+}

@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <!--
+      The desktop shell itself loads no remote code. Apps are framed from their
+      own gateway origins, which is the only outside source allowed here; the
+      port is assigned at launch, hence the wildcard.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none';
+               script-src 'self';
+               style-src 'unsafe-inline';
+               img-src 'self' data:;
+               frame-src http://*.desktop.localhost:*;
+               connect-src 'self'"
+    />
+    <title>Local Desktop</title>
+    <style>
+      :root {
+        --bg: #11131a;
+        --surface: #1b1f2a;
+        --surface-2: #232838;
+        --line: #2f3646;
+        --text: #e8ebf2;
+        --muted: #939cb0;
+        --accent: #6ea8fe;
+        --danger: #ff7b72;
+        --radius: 12px;
+        --titlebar: 36px;
+      }
+
+      * { box-sizing: border-box; }
+
+      html, body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: var(--bg);
+        color: var(--text);
+        font: 14px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      #desktop {
+        position: relative;
+        height: 100%;
+        background:
+          radial-gradient(1100px 700px at 78% -8%, #253048 0%, transparent 60%),
+          radial-gradient(900px 600px at 8% 108%, #1e2a3d 0%, transparent 55%),
+          var(--bg);
+      }
+
+      /* Drag region for the hidden-inset traffic lights. */
+      #chrome {
+        height: 34px;
+        -webkit-app-region: drag;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--muted);
+        font-size: 12px;
+        letter-spacing: 0.04em;
+      }
+
+      #icons {
+        position: absolute;
+        inset: 42px 0 76px 0;
+        padding: 16px 22px;
+        display: grid;
+        grid-template-columns: repeat(auto-fill, 108px);
+        grid-auto-rows: 108px;
+        gap: 10px;
+        align-content: start;
+      }
+
+      .icon {
+        -webkit-app-region: no-drag;
+        border: 0;
+        background: transparent;
+        color: var(--text);
+        border-radius: var(--radius);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        cursor: pointer;
+        padding: 10px 6px;
+        transition: background 120ms ease, transform 120ms ease;
+        font: inherit;
+      }
+      .icon:hover { background: rgba(255, 255, 255, 0.06); }
+      .icon:active { transform: scale(0.96); }
+      .icon .glyph {
+        width: 54px; height: 54px;
+        display: grid; place-items: center;
+        font-size: 28px;
+        border-radius: 14px;
+        background: linear-gradient(160deg, var(--surface-2), var(--surface));
+        border: 1px solid var(--line);
+      }
+      .icon .label {
+        font-size: 12px;
+        text-align: center;
+        max-width: 96px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .icon.broken .glyph { border-color: #5b2b2b; color: var(--danger); }
+      .icon .badge {
+        position: relative;
+        top: -6px;
+        font-size: 10px;
+        color: var(--muted);
+      }
+
+      .window {
+        position: absolute;
+        display: flex;
+        flex-direction: column;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.4);
+        overflow: hidden;
+        min-width: 320px;
+        min-height: 200px;
+      }
+
+      .titlebar {
+        height: var(--titlebar);
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0 10px;
+        background: var(--surface-2);
+        border-bottom: 1px solid var(--line);
+        cursor: grab;
+        user-select: none;
+      }
+      .titlebar:active { cursor: grabbing; }
+      .titlebar .name { font-size: 12.5px; font-weight: 500; }
+      .titlebar .spacer { flex: 1; }
+      .titlebar button {
+        -webkit-app-region: no-drag;
+        width: 22px; height: 22px;
+        border-radius: 6px;
+        border: 1px solid var(--line);
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+        display: grid; place-items: center;
+        font-size: 13px; line-height: 1;
+      }
+      .titlebar button:hover { background: rgba(255,255,255,0.08); color: var(--text); }
+
+      .window .body { flex: 1; position: relative; background: #fff; }
+      .window iframe { width: 100%; height: 100%; border: 0; display: block; }
+
+      .state {
+        position: absolute; inset: 0;
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 10px;
+        background: var(--surface);
+        color: var(--muted);
+        padding: 20px;
+        text-align: center;
+      }
+      .state pre {
+        max-height: 220px; overflow: auto;
+        background: #0e1017;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 10px 12px;
+        font-size: 11.5px;
+        color: #cbd3e1;
+        text-align: left;
+        width: 100%;
+        white-space: pre-wrap;
+      }
+      .state .err { color: var(--danger); font-weight: 500; }
+
+      .spinner {
+        width: 22px; height: 22px;
+        border-radius: 50%;
+        border: 2px solid var(--line);
+        border-top-color: var(--accent);
+        animation: spin 700ms linear infinite;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+
+      .resize {
+        position: absolute; right: 0; bottom: 0;
+        width: 16px; height: 16px;
+        cursor: nwse-resize;
+      }
+
+      /* Sits over every iframe while dragging so the pointer stream is not
+         swallowed by app content. */
+      #shield { position: absolute; inset: 0; z-index: 9999; }
+      #shield[hidden] { display: none; }
+
+      #dock {
+        position: absolute;
+        left: 50%; bottom: 16px;
+        transform: translateX(-50%);
+        display: flex; align-items: center; gap: 8px;
+        padding: 8px 10px;
+        background: rgba(27, 31, 42, 0.82);
+        backdrop-filter: blur(12px);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+      }
+      #dock .hint { color: var(--muted); font-size: 12px; padding: 0 6px; }
+      #dock button {
+        -webkit-app-region: no-drag;
+        border: 1px solid var(--line);
+        background: transparent;
+        color: var(--text);
+        border-radius: 9px;
+        height: 30px; padding: 0 10px;
+        cursor: pointer; font: inherit; font-size: 12.5px;
+      }
+      #dock button:hover { background: rgba(255,255,255,0.07); }
+
+      #empty {
+        position: absolute; inset: 0;
+        display: grid; place-items: center;
+        color: var(--muted);
+        pointer-events: none;
+      }
+
+      #desktop.dropping::after {
+        content: 'Drop a project folder to link it';
+        position: absolute; inset: 12px;
+        border: 2px dashed var(--accent);
+        border-radius: 16px;
+        display: grid; place-items: end center;
+        padding-bottom: 90px;
+        color: var(--accent);
+        font-size: 13px;
+        background: rgba(110, 168, 254, 0.06);
+        pointer-events: none;
+        /* Below windows: this is a hint about the desktop, and must never
+           paint over an app you are looking at. */
+        z-index: 1;
+      }
+
+      .toast {
+        position: fixed;
+        left: 50%; bottom: 70px;
+        transform: translateX(-50%);
+        background: var(--surface-2);
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        padding: 9px 14px;
+        font-size: 13px;
+        z-index: 10001;
+        box-shadow: 0 12px 30px rgba(0,0,0,0.45);
+      }
+      .toast.err { border-color: #5b2b2b; color: var(--danger); }
+
+      /* ⌘K palette */
+      #palette {
+        position: absolute; inset: 0; z-index: 10000;
+        background: rgba(8, 10, 15, 0.55);
+        backdrop-filter: blur(3px);
+        display: flex; justify-content: center;
+        padding-top: 14vh;
+      }
+      #palette[hidden] { display: none; }
+      #palette .sheet {
+        width: min(620px, 90vw);
+        height: fit-content;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+        overflow: hidden;
+      }
+      #prompt {
+        width: 100%;
+        border: 0; outline: 0;
+        background: transparent;
+        color: var(--text);
+        font: inherit; font-size: 16px;
+        padding: 18px 20px;
+      }
+      #prompt::placeholder { color: var(--muted); }
+      #palette .foot {
+        border-top: 1px solid var(--line);
+        padding: 9px 20px;
+        color: var(--muted);
+        font-size: 12px;
+        display: flex; gap: 10px; align-items: center;
+      }
+      #palette kbd {
+        border: 1px solid var(--line);
+        border-bottom-width: 2px;
+        border-radius: 5px;
+        padding: 1px 5px;
+        font: inherit; font-size: 11px;
+        color: var(--text);
+      }
+      #progress { padding: 0 20px; }
+      #progress:empty { display: none; }
+      #progress .line {
+        display: flex; align-items: center; gap: 9px;
+        padding: 5px 0; font-size: 13px; color: var(--muted);
+        border-top: 1px solid var(--line);
+      }
+      #progress .line:first-child { border-top: 0; }
+      #progress .line.err { color: var(--danger); }
+      #progress .line .tick { color: #4ade80; }
+    </style>
+  </head>
+  <body>
+    <div id="desktop">
+      <div id="chrome">Local Desktop</div>
+      <div id="icons"></div>
+      <div id="windows"></div>
+      <div id="shield" hidden></div>
+      <footer id="dock">
+        <button id="new-app">✨ New app</button>
+        <span class="hint">or press ⌘K</span>
+        <button id="refresh">Refresh</button>
+      </footer>
+
+      <div id="palette" hidden>
+        <div class="sheet">
+          <input
+            id="prompt"
+            type="text"
+            placeholder="Describe an app to build…"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <div id="progress"></div>
+          <div class="foot">
+            <kbd>↵</kbd><span>build</span>
+            <kbd>esc</kbd><span>close</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="./renderer.js"></script>
+  </body>
+</html>

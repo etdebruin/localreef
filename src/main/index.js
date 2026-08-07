@@ -1,0 +1,249 @@
+/**
+ * Electron main process.
+ *
+ * Wires the three pieces together: registry (what apps exist), supervisor
+ * (which are running), gateway (how the browser reaches them), and hands the
+ * renderer a URL per app.
+ */
+
+import { app, BrowserWindow, ipcMain, session, shell } from 'electron'
+import crypto from 'node:crypto'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+import fs from 'node:fs/promises'
+
+import { scanApps, readApp } from '../core/registry.js'
+import { createLinkStore } from '../core/links.js'
+import { createSupervisor } from './supervisor.js'
+import { createGateway } from '../gateway/index.js'
+import { AUTH_PARAM, AUTH_HEADER } from '../gateway/auth.js'
+import { createGenerator, createClaudeRunner } from './agent.js'
+
+const here = path.dirname(fileURLToPath(import.meta.url))
+const projectRoot = path.resolve(here, '../..')
+
+// Guarantee *.desktop.localhost resolves to loopback rather than trusting the
+// system resolver to do the RFC 6761 thing.
+app.commandLine.appendSwitch('host-resolver-rules', 'MAP *.desktop.localhost 127.0.0.1')
+
+const TOKEN = crypto.randomBytes(24).toString('hex')
+
+let links = null
+let mainWindow = null
+let gateway = null
+let apps = new Map()
+
+const supervisor = createSupervisor({
+  onChange: (id, state) => {
+    mainWindow?.webContents.send('apps:state', { id, ...state })
+  },
+})
+
+/** Bundled samples plus anything the user (or the agent) has added. */
+function appDirectories() {
+  return [path.join(projectRoot, 'apps'), path.join(app.getPath('userData'), 'apps')]
+}
+
+async function refreshApps() {
+  const scanned = await Promise.all(appDirectories().map(scanApps))
+
+  // Linked projects live wherever they already are; we read the folder in
+  // place rather than copying anything.
+  const linkedDirs = await links.list()
+  const linked = await Promise.all(linkedDirs.map(readApp))
+
+  const all = [...scanned.flat(), ...linked.map((a) => ({ ...a, linked: true }))]
+  apps = new Map(all.map((a) => [a.id, a]))
+  return [...apps.values()]
+}
+
+function urlFor(id, { withToken = false } = {}) {
+  const base = `http://${id}.desktop.localhost:${gateway.port}/`
+  return withToken ? `${base}?${AUTH_PARAM}=${TOKEN}` : base
+}
+
+function serialise(record) {
+  const state = supervisor.get(record.id)
+  return {
+    id: record.id,
+    dir: record.dir,
+    linked: record.linked ?? false,
+    name: record.name,
+    icon: record.icon,
+    type: record.type,
+    error: record.error,
+    status: record.error ? 'broken' : state.status,
+    logs: state.logs,
+  }
+}
+
+async function createWindow() {
+  mainWindow = new BrowserWindow({
+    width: 1280,
+    height: 820,
+    minWidth: 900,
+    minHeight: 600,
+    title: 'Local Desktop',
+    backgroundColor: '#11131a',
+    titleBarStyle: 'hiddenInset',
+    webPreferences: {
+      preload: path.join(here, 'preload.cjs'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  })
+
+  // Surface renderer problems in the terminal. Without this a thrown error in
+  // renderer.js is an invisible blank desktop.
+  mainWindow.webContents.on('console-message', (...args) => {
+    // Electron changed this signature mid-life: older builds pass positional
+    // arguments, newer ones a details object.
+    const details = typeof args[0] === 'object' && 'message' in args[0] ? args[0] : null
+    const level = details ? details.level : args[1]
+    const message = details ? details.message : args[2]
+    const source = details ? `${details.sourceId}:${details.lineNumber}` : `${args[4]}:${args[3]}`
+    if (level === 'error' || level === 'warning' || level >= 2) {
+      console.error(`[renderer] ${message}  (${source})`)
+    }
+  })
+
+  mainWindow.webContents.on('did-fail-load', (_e, code, description, url) => {
+    console.error(`[renderer] failed to load ${url}: ${description} (${code})`)
+  })
+
+  mainWindow.webContents.on('render-process-gone', (_e, details) => {
+    console.error('[renderer] process gone:', details.reason)
+  })
+
+  await mainWindow.loadFile(path.join(projectRoot, 'src/renderer/index.html'))
+  mainWindow.on('closed', () => {
+    mainWindow = null
+  })
+}
+
+app.whenReady().then(async () => {
+  links = createLinkStore(path.join(app.getPath('userData'), 'links.json'))
+
+  // Authenticate framed apps by header rather than cookie. An app iframe is a
+  // cross-site context relative to the file:// renderer, so a SameSite=Lax
+  // cookie gets stored and then never sent back — the app would load once and
+  // 401 on the redirect. Scoped strictly to app origins so the token cannot
+  // leak anywhere else.
+  session.defaultSession.webRequest.onBeforeSendHeaders(
+    { urls: ['*://*.desktop.localhost/*'] },
+    (details, callback) => {
+      callback({ requestHeaders: { ...details.requestHeaders, [AUTH_HEADER]: TOKEN } })
+    },
+  )
+
+  gateway = createGateway({ token: TOKEN, lookup: (id) => lookupForGateway(id) })
+  await gateway.listen(0)
+
+  await refreshApps()
+  await createWindow()
+
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+  })
+})
+
+/** The gateway asks for a live view: registry record merged with run state. */
+function lookupForGateway(id) {
+  const record = apps.get(id)
+  if (!record || record.error) return null
+
+  const state = supervisor.get(id)
+  return {
+    id,
+    type: record.type,
+    root: record.root,
+    status: record.type === 'static' ? 'ready' : state.status,
+    port: state.port,
+  }
+}
+
+ipcMain.handle('apps:list', async () => {
+  const records = await refreshApps()
+  return records.map(serialise)
+})
+
+ipcMain.handle('apps:launch', async (_event, id) => {
+  const record = apps.get(id)
+  if (!record) return { ok: false, error: `No app called "${id}"` }
+  if (record.error) return { ok: false, error: record.error }
+
+  const state = await supervisor.ensureStarted(record)
+  if (state.status !== 'ready') {
+    return { ok: false, error: state.error ?? 'Failed to start', logs: state.logs }
+  }
+
+  return { ok: true, url: urlFor(id, { withToken: true }), name: record.name, icon: record.icon }
+})
+
+ipcMain.handle('apps:stop', async (_event, id) => {
+  await supervisor.stop(id)
+  return { ok: true }
+})
+
+ipcMain.handle('apps:link', async (_event, paths) => {
+  const results = []
+  for (const dir of paths ?? []) results.push(await links.add(dir))
+
+  await refreshApps()
+  const failed = results.filter((r) => !r.ok)
+  return { ok: failed.length === 0, linked: results.filter((r) => r.ok).length, errors: failed }
+})
+
+ipcMain.handle('apps:unlink', async (_event, dir) => {
+  await links.remove(dir)
+  await refreshApps()
+  return { ok: true }
+})
+
+ipcMain.handle('apps:reveal', async (_event, id) => {
+  const record = apps.get(id)
+  if (record) shell.showItemInFolder(record.dir)
+  return { ok: true }
+})
+
+// Generated apps land in userData, never in the repo's apps/ folder — that one
+// holds the samples and anything the user is editing by hand.
+ipcMain.handle('apps:generate', async (_event, prompt) => {
+  if (!String(prompt ?? '').trim()) return { ok: false, error: 'Describe what to build.' }
+
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return {
+      ok: false,
+      error: 'No ANTHROPIC_API_KEY in the environment. Set one and relaunch.',
+    }
+  }
+
+  const generatedDir = path.join(app.getPath('userData'), 'apps')
+  await fs.mkdir(generatedDir, { recursive: true })
+
+  const generator = createGenerator({
+    appsDir: generatedDir,
+    runAgent: createClaudeRunner(),
+  })
+
+  const result = await generator.generate({
+    prompt,
+    onProgress: (progress) => mainWindow?.webContents.send('apps:generating', progress),
+  })
+
+  if (result.ok) await refreshApps()
+  return result
+})
+
+async function shutdown() {
+  await supervisor.stopAll()
+  await gateway?.close()
+}
+
+app.on('window-all-closed', async () => {
+  await shutdown()
+  if (process.platform !== 'darwin') app.quit()
+})
+
+app.on('before-quit', shutdown)
