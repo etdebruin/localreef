@@ -174,12 +174,88 @@ export function createGenerator({ appsDir, runAgent }) {
   return { generate }
 }
 
+const FIX_SYSTEM_PROMPT = `You repair a broken app for Local Desktop, a desktop shell that runs local apps in windows.
+
+You are given the failure and the app's current files. Read what you need with read_file, then write corrected files with write_file.
+
+How to work:
+- Fix the specific failure described. Do not redesign the app, rename things, or "improve" code that is not implicated in the error.
+- Change as little as possible. A reader should be able to see exactly what you fixed and why.
+- Read a file before you rewrite it. write_file replaces the whole file, so you must preserve everything you are not deliberately changing.
+- If the error is a missing dependency or a broken command, prefer fixing the app so it needs neither, rather than adding an install step.
+
+The same constraints as any Local Desktop app still apply: no network requests, no CDNs, works offline, state in localStorage.
+
+When the fix is complete, stop and say in one sentence what was wrong and what you changed. If you cannot determine the cause from the evidence, say so plainly instead of guessing at a rewrite.`
+
+/**
+ * Repairing an app that already exists.
+ *
+ * Deliberately not part of createGenerator: generation owns the folder it
+ * creates and deletes it on failure, but a fix operates on a folder that is
+ * already the user's — for a linked app it is their actual project checkout.
+ * Nothing here ever removes anything.
+ */
+export function createFixer({ runAgent }) {
+  async function fix({ id, dir, name, error, logs = [], onProgress = () => {} }) {
+    onProgress({ phase: 'reading', id })
+
+    let listing = []
+    try {
+      const entries = await fs.readdir(dir, { recursive: true, withFileTypes: true })
+      listing = entries
+        .filter((e) => e.isFile())
+        .map((e) => path.relative(dir, path.join(e.parentPath ?? e.path, e.name)))
+        .filter((f) => !f.startsWith('node_modules/') && !f.startsWith('.git/'))
+    } catch (err) {
+      return { ok: false, id, error: `Cannot read the app folder: ${err.message}` }
+    }
+
+    const { tools, written } = createAppTools(dir, {
+      onFile: (file) => onProgress({ phase: 'writing', id, file }),
+    })
+
+    const prompt = [
+      `The app "${name ?? id}" failed to start.`,
+      '',
+      `Failure: ${error ?? 'unknown'}`,
+      logs.length ? `\nOutput:\n${logs.slice(-40).join('\n')}` : '',
+      `\nFiles in the app:\n${listing.length ? listing.join('\n') : '(none)'}`,
+    ].join('\n')
+
+    let final
+    try {
+      final = await runAgent({ prompt, tools, dir, id, onProgress, system: FIX_SYSTEM_PROMPT })
+    } catch (err) {
+      return { ok: false, id, error: err?.message ?? String(err) }
+    }
+
+    if (final?.stop_reason === 'refusal') {
+      const category = final.stop_details?.category
+      return {
+        ok: false,
+        id,
+        error: `The model declined this request${category ? ` (${category})` : ''}.`,
+      }
+    }
+
+    if (written.size === 0) {
+      return { ok: false, id, error: 'The agent made no changes.' }
+    }
+
+    onProgress({ phase: 'done', id })
+    return { ok: true, id, dir, files: [...written] }
+  }
+
+  return { fix }
+}
+
 /**
  * The real model-backed runner. Kept separate from createGenerator so the
  * generation flow is testable without touching the network.
  */
 export function createClaudeRunner({ apiKey, model = MODEL } = {}) {
-  return async function runAgent({ prompt, tools, onProgress = () => {} }) {
+  return async function runAgent({ prompt, tools, onProgress = () => {}, system }) {
     const [{ default: Anthropic }, { betaTool }] = await Promise.all([
       import('@anthropic-ai/sdk'),
       import('@anthropic-ai/sdk/helpers/beta/json-schema'),
@@ -201,7 +277,7 @@ export function createClaudeRunner({ apiKey, model = MODEL } = {}) {
       // `high` rather than `xhigh`: the quality difference on an app this size
       // does not pay for the extra latency in an interactive flow.
       output_config: { effort: 'high' },
-      system: SYSTEM_PROMPT,
+      system: system ?? SYSTEM_PROMPT,
       messages: [{ role: 'user', content: prompt }],
       tools: tools.map((tool) =>
         betaTool({

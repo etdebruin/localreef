@@ -166,6 +166,79 @@ function showState(body, ...children) {
   body.replaceChildren(h('div', { className: 'state' }, ...children))
 }
 
+// ------------------------------------------------------------- fix with AI
+
+const homeShort = (p) => (p ?? '').replace(/^\/Users\/[^/]+/, '~')
+
+/**
+ * Repair affordance for a failed app.
+ *
+ * Always names the folder it will edit. A linked app's folder is the user's
+ * real project checkout, so that case takes an explicit second click rather
+ * than rewriting someone's repository on a single misclick.
+ */
+function fixPanel(win, app, onDone) {
+  const wrap = h('div', { className: 'fix-wrap' })
+  const button = h('button', { className: 'fix', textContent: '✨ Fix with AI' })
+  const note = h('div', {
+    className: 'fix-note',
+    textContent: app.dir ? `edits ${homeShort(app.dir)}` : '',
+  })
+
+  let armed = !app.linked
+
+  button.addEventListener('click', async () => {
+    if (!armed) {
+      armed = true
+      button.textContent = `Edit my project at ${homeShort(app.dir)}?`
+      button.classList.add('confirm')
+      note.textContent = 'This is a linked folder — files will change on disk. Click again to confirm.'
+      return
+    }
+
+    const log = h('div', { className: 'fix-log' })
+    showState(
+      win.body,
+      h('div', { className: 'spinner' }),
+      h('div', { textContent: 'Reading the app and the error…' }),
+      log,
+    )
+
+    const stop = window.desktop.onFixing(({ phase, file }) => {
+      if (phase === 'writing') log.append(h('div', { textContent: `✓ rewrote ${file}` }))
+    })
+
+    const result = await window.desktop.fix(app.id)
+    stop?.()
+
+    if (!result.ok) {
+      showState(
+        win.body,
+        h('div', { className: 'err', textContent: 'Could not fix it' }),
+        h('div', { textContent: result.error ?? '' }),
+      )
+      return
+    }
+
+    showState(
+      win.body,
+      h('div', { className: 'spinner' }),
+      h('div', { textContent: `Fixed ${result.files.join(', ')} — restarting…` }),
+    )
+    onDone()
+  })
+
+  wrap.append(button, note)
+  return wrap
+}
+
+async function reopen(id) {
+  closeWindow(id)
+  const apps = await window.desktop.listApps()
+  const fresh = apps.find((a) => a.id === id)
+  if (fresh) openApp(fresh)
+}
+
 async function openApp(app) {
   if (openWindows.has(app.id)) return focusWindow(app.id)
 
@@ -177,6 +250,7 @@ async function openApp(app) {
       win.body,
       h('div', { className: 'err', textContent: 'This app could not be read' }),
       h('pre', { textContent: app.error ?? 'Unknown error' }),
+      fixPanel(win, app, () => reopen(app.id)),
     )
     return
   }
@@ -198,6 +272,7 @@ async function openApp(app) {
       h('div', { className: 'err', textContent: 'Failed to start' }),
       h('div', { textContent: result.error ?? '' }),
       result.logs?.length ? h('pre', { textContent: result.logs.join('\n') }) : null,
+      fixPanel(win, app, () => reopen(app.id)),
     )
     return
   }
@@ -364,10 +439,16 @@ desktopEl.addEventListener('drop', async (event) => {
 
 refreshEl.addEventListener('click', renderIcons)
 
-window.desktop.onState(({ id, status }) => {
+window.desktop.onState(({ id, status, error, logs }) => {
   const win = openWindows.get(id)
   if (win && status === 'crashed') {
-    showState(win.body, h('div', { className: 'err', textContent: 'App crashed' }))
+    showState(
+      win.body,
+      h('div', { className: 'err', textContent: 'App crashed' }),
+      h('div', { textContent: error ?? '' }),
+      logs?.length ? h('pre', { textContent: logs.join('\n') }) : null,
+      fixPanel(win, win.app, () => reopen(id)),
+    )
   }
 })
 

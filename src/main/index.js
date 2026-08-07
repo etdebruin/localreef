@@ -18,7 +18,7 @@ import { createLinkStore } from '../core/links.js'
 import { createSupervisor } from './supervisor.js'
 import { createGateway } from '../gateway/index.js'
 import { AUTH_PARAM, AUTH_HEADER } from '../gateway/auth.js'
-import { createGenerator, createClaudeRunner } from './agent.js'
+import { createGenerator, createFixer, createClaudeRunner } from './agent.js'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const projectRoot = path.resolve(here, '../..')
@@ -233,6 +233,37 @@ ipcMain.handle('apps:generate', async (_event, prompt) => {
   })
 
   if (result.ok) await refreshApps()
+  return result
+})
+
+ipcMain.handle('apps:fix', async (_event, id) => {
+  const record = apps.get(id)
+  if (!record) return { ok: false, error: `No app called "${id}"` }
+
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return { ok: false, error: 'No ANTHROPIC_API_KEY in the environment. Set one and relaunch.' }
+  }
+
+  const state = supervisor.get(id)
+  const fixer = createFixer({ runAgent: createClaudeRunner() })
+
+  const result = await fixer.fix({
+    id,
+    dir: record.dir,
+    name: record.name,
+    // A registry error (unreadable manifest) and a runtime crash are both
+    // "why this app will not open"; the model gets whichever applies.
+    error: record.error ?? state.error ?? 'The app failed to start.',
+    logs: state.logs ?? [],
+    onProgress: (progress) => mainWindow?.webContents.send('apps:fixing', progress),
+  })
+
+  // Drop the old process so the next launch picks up the edited files.
+  if (result.ok) {
+    await supervisor.stop(id)
+    await refreshApps()
+  }
+
   return result
 })
 

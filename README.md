@@ -44,6 +44,19 @@ removes the folder rather than leaving a broken icon behind.
 
 ---
 
+## When an app breaks
+
+The crash panel shows the real stderr, not a blank window — and a **Fix with
+AI** button. It reads the app's files plus the failure, edits them in place, and
+relaunches. Repairs are deliberately minimal: it fixes the failure rather than
+redesigning the app.
+
+For a **linked** project the folder is your actual checkout, so the button names
+the path and takes a second, explicit click before touching anything. A fix
+never deletes files, even when it fails.
+
+---
+
 ## Running a project you already have
 
 Drag its folder onto the desktop. Nothing is copied — the folder stays where it

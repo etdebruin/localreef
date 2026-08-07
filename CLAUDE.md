@@ -127,6 +127,12 @@ streaming required. Tuning that was arrived at empirically:
 Generated apps are written to `userData/apps/`, never into this repo's `apps/`.
 A failed or refused run deletes the folder rather than leaving a broken icon.
 
+`createFixer` repairs an existing app and is deliberately separate from
+`createGenerator`. Generation owns the folder it created and deletes it on
+failure; a fix operates on a folder that is already the user's — for a linked
+app it is their real project checkout. **A fix must never delete anything**, and
+the UI takes a second confirming click before editing a linked folder.
+
 ## Where apps come from
 
 Three sources, merged in `refreshApps()`:

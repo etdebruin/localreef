@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld('desktop', {
   stop: (id) => ipcRenderer.invoke('apps:stop', id),
   reveal: (id) => ipcRenderer.invoke('apps:reveal', id),
   generate: (prompt) => ipcRenderer.invoke('apps:generate', prompt),
+  fix: (id) => ipcRenderer.invoke('apps:fix', id),
   link: (paths) => ipcRenderer.invoke('apps:link', paths),
   unlink: (dir) => ipcRenderer.invoke('apps:unlink', dir),
 
@@ -29,4 +30,5 @@ contextBridge.exposeInMainWorld('desktop', {
 
   onState: (callback) => subscribe('apps:state', callback),
   onGenerating: (callback) => subscribe('apps:generating', callback),
+  onFixing: (callback) => subscribe('apps:fixing', callback),
 })

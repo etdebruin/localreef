@@ -185,6 +185,25 @@
       }
       .state .err { color: var(--danger); font-weight: 500; }
 
+      .fix-wrap { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+      button.fix {
+        border: 1px solid var(--accent);
+        background: rgba(110, 168, 254, 0.12);
+        color: var(--text);
+        border-radius: 9px;
+        padding: 8px 14px;
+        font: inherit; font-size: 13px;
+        cursor: pointer;
+      }
+      button.fix:hover { background: rgba(110, 168, 254, 0.2); }
+      /* Second-click state for a linked folder: this edits a real project. */
+      button.fix.confirm {
+        border-color: var(--danger);
+        background: rgba(255, 123, 114, 0.14);
+      }
+      .fix-note { color: var(--muted); font-size: 11.5px; max-width: 420px; }
+      .fix-log { color: var(--muted); font-size: 12px; text-align: left; }
+
       .spinner {
         width: 22px; height: 22px;
         border-radius: 50%;
