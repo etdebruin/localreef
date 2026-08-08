@@ -103,6 +103,31 @@ test('createFixer', async (t) => {
     await fs.rm(dir, { recursive: true, force: true })
   })
 
+  // A static app never crashes its process — its failures live in the frame's
+  // console. When the shell captured some, the model should see them.
+  await t.test('gives the model captured console errors', async () => {
+    const dir = await brokenApp({ 'index.html': 'x' })
+    let seen = null
+
+    const runAgent = async (args) => {
+      seen = args
+      await toolMap(args.tools).write_file.run({ path: 'index.html', content: 'ok' })
+      return { stop_reason: 'end_turn' }
+    }
+
+    await createFixer({ runAgent }).fix({
+      id: 'thing',
+      dir,
+      error: 'boom',
+      consoleErrors: ["Uncaught TypeError: Cannot read properties of null (index.html:212)"],
+    })
+
+    assert.match(seen.prompt, /console/i)
+    assert.match(seen.prompt, /Uncaught TypeError/)
+    assert.match(seen.prompt, /index\.html:212/)
+    await fs.rm(dir, { recursive: true, force: true })
+  })
+
   await t.test('reports progress per file written', async () => {
     const dir = await brokenApp({ 'index.html': 'x' })
     const events = []

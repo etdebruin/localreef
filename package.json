@@ -34,6 +34,7 @@
     "shot": "node scripts/shot.mjs",
     "test:electron:ws": "electron test/electron/iframe-websocket.mjs",
     "test:electron:media": "electron test/electron/iframe-media.mjs",
+    "test:electron:console": "electron test/electron/iframe-console.mjs",
     "icon": "electron scripts/make-icon.mjs",
     "build:mac": "node scripts/package.mjs",
     "install:mac": "node scripts/install.mjs"

@@ -20,6 +20,7 @@ import { createSessionStore } from '../core/session.js'
 import { readIconImage, isImageIcon, initialsFor, hueFor } from '../core/icon.js'
 import { BACKGROUNDS, resolveBackground } from '../core/backgrounds.js'
 import { allowsMedia, framePolicy } from '../core/policy.js'
+import { createConsoleCapture } from '../core/console.js'
 import { createSupervisor } from './supervisor.js'
 import { createGateway } from '../gateway/index.js'
 import { AUTH_PARAM, AUTH_HEADER } from '../gateway/auth.js'
@@ -59,11 +60,20 @@ const supervisor = createSupervisor({
   resolveApiKey: async () => resolveApiKey(await settings.read()),
 })
 
+// Errors the app frames log, sorted per app, so a fix or edit turn can hand
+// the model the actual exception instead of a description of its symptom.
+const consoleCapture = createConsoleCapture()
+
 // Folder watching for open static apps: an edit — from the ⌘K chat or the
 // user's own editor — reloads the frame. Server apps are never watched; their
 // dev servers own reload (Vite HMR rides the gateway's WebSocket relay).
 const watcher = createWatcher({
-  onChange: (id) => mainWindow?.webContents.send('apps:changed', { id }),
+  onChange: (id) => {
+    // The files just changed, so errors thrown by the old code are no longer
+    // evidence — they would steer the next fix at a bug that may be gone.
+    consoleCapture.clear(id)
+    mainWindow?.webContents.send('apps:changed', { id })
+  },
 })
 
 // Edit-chat conversations, per app, in memory only — the durable state is the
@@ -206,17 +216,31 @@ async function createWindow() {
     },
   })
 
-  // Surface renderer problems in the terminal. Without this a thrown error in
-  // renderer.js is an invisible blank desktop.
+  // One console-message stream carries the whole desktop: the shell's own
+  // renderer and every app iframe. Surface problems in the terminal — without
+  // this a thrown error in renderer.js is an invisible blank desktop — and
+  // sort app-frame errors into the per-app capture, where the next fix or
+  // edit turn picks them up as evidence.
   mainWindow.webContents.on('console-message', (...args) => {
     // Electron changed this signature mid-life: older builds pass positional
-    // arguments, newer ones a details object.
+    // arguments, newer ones a details object (which also names the frame —
+    // the only reliable attribution for an app's errors).
     const details = typeof args[0] === 'object' && 'message' in args[0] ? args[0] : null
     const level = details ? details.level : args[1]
     const message = details ? details.message : args[2]
-    const source = details ? `${details.sourceId}:${details.lineNumber}` : `${args[4]}:${args[3]}`
+    const line = details ? details.lineNumber : args[3]
+    const sourceUrl = details ? details.sourceId : args[4]
+
+    const appId = consoleCapture.record({
+      level,
+      message,
+      line,
+      sourceUrl,
+      frameUrl: details?.frame?.url,
+    })
+
     if (level === 'error' || level === 'warning' || level >= 2) {
-      console.error(`[renderer] ${message}  (${source})`)
+      console.error(`[${appId ?? 'renderer'}] ${message}  (${sourceUrl}:${line})`)
     }
   })
 
@@ -519,6 +543,7 @@ ipcMain.handle('apps:fix', async (_event, id) => {
     // "why this app will not open"; the model gets whichever applies.
     error: record.error ?? state.error ?? 'The app failed to start.',
     logs: state.logs ?? [],
+    consoleErrors: consoleCapture.recent(id),
     onProgress: (progress) => mainWindow?.webContents.send('apps:fixing', progress),
   })
 
@@ -557,6 +582,7 @@ ipcMain.handle('apps:edit', async (_event, { id, message } = {}) => {
       name: record.name,
       message,
       history,
+      consoleErrors: consoleCapture.recent(id),
       // Every event carries the id so concurrent edit sessions cannot cross
       // streams — the palette-era 'thinking' event never had one.
       onProgress: (progress) => mainWindow?.webContents.send('apps:editing', { ...progress, id }),

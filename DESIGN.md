@@ -345,6 +345,16 @@ instant launch, trivially editable, tiny crash surface. Escalate to a Node serve
 when the app genuinely needs one (secrets, filesystem access, long-running work). This
 choice is what makes the demo *fast*, and speed is most of the magic.
 
+**Fix and edit turns carry evidence, not just symptoms.** Every app iframe
+shares the shell's webContents, so main hears one `console-message` stream for
+the whole desktop. `src/core/console.js` sorts it into a small per-app ring
+buffer of *errors only*, attributed by the frame's `*.reef.localhost` origin
+(`parseHostname`), deduplicating back-to-back repeats and clearing an app's
+buffer the moment its files change — errors thrown by old code must not steer
+a fix at a bug that may already be gone. `apps:fix` and `apps:edit` attach the
+buffer to the prompt, so "the button doesn't work" arrives alongside the
+actual `Uncaught TypeError` and its `index.html:212`.
+
 **A build is background work from the moment it has an id.** The
 `apps:generate` invoke resolves as soon as the folder has a name; progress
 streams on `apps:generating` and the outcome lands on `apps:generated` (after

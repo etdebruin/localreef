@@ -12,6 +12,7 @@ npm run test:electron      # iframe auth, needs a real Electron GUI
 npm run test:electron:ui   # dock/window/settings, edit pane, hello, session restore
 npm run test:electron:ws   # browser-initiated WebSocket from an app iframe
 npm run test:electron:media # mic/camera Permissions Policy on an app iframe
+npm run test:electron:console # app-frame errors reach main, attributed per app
 npm run test:vite          # real Vite through the gateway, incl. live HMR
 npm run shot               # screenshot the running app into .shots/
 npm run install:mac        # rebuild Local Reef.app into /Applications, if stale
@@ -210,6 +211,11 @@ plain suite structurally cannot**, and two shipped bugs prove it:
   it. Nothing in Node can answer that: the policy is applied by the browser to
   a cross-origin frame, and the iframe served fine over HTTP the whole time the
   microphone was silently denied.
+- `test:electron:console` throws an uncaught exception inside a real app
+  iframe and asserts it reaches main's `console-message` with a frame URL that
+  attributes it to the app. The fix/edit prompts' console evidence rests
+  entirely on Chromium forwarding frame console output with `details.frame` —
+  if that stops, the capture records nothing and prompts silently get worse.
 
 The pattern behind all four: **assert the effect a user sees, not the mechanism
 you just wrote.** Minimize shipped broken because its test asserted

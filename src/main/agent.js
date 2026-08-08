@@ -173,6 +173,16 @@ async function listAppFiles(dir) {
     .filter((f) => !f.startsWith('node_modules/') && !f.startsWith('.git/'))
 }
 
+/**
+ * The evidence section shared by fix and edit prompts: errors the shell
+ * captured from the app's own frame. Empty capture, empty string — a heading
+ * over nothing invites the model to hallucinate an error to explain.
+ */
+function consoleSection(consoleErrors) {
+  if (!consoleErrors?.length) return ''
+  return `\nRecent errors from the app's console:\n${consoleErrors.join('\n')}`
+}
+
 /** The assistant's reply text, for a chat bubble. Never empty. */
 function finalText(message) {
   const text = (message?.content ?? [])
@@ -295,7 +305,7 @@ When the fix is complete, stop and say in one sentence what was wrong and what y
  * Nothing here ever removes anything.
  */
 export function createFixer({ runAgent }) {
-  async function fix({ id, dir, name, error, logs = [], onProgress = () => {} }) {
+  async function fix({ id, dir, name, error, logs = [], consoleErrors = [], onProgress = () => {} }) {
     onProgress({ phase: 'reading', id })
 
     let listing = []
@@ -314,6 +324,7 @@ export function createFixer({ runAgent }) {
       '',
       `Failure: ${error ?? 'unknown'}`,
       logs.length ? `\nOutput:\n${logs.slice(-40).join('\n')}` : '',
+      consoleSection(consoleErrors),
       `\nFiles in the app:\n${listing.length ? listing.join('\n') : '(none)'}`,
     ].join('\n')
 
@@ -371,7 +382,7 @@ When you are done, reply in one or two sentences — your reply is shown in a ch
  * caller's cue to leave history untouched so the user can rephrase.
  */
 export function createEditor({ runAgent }) {
-  async function edit({ id, dir, name, message, history = [], onProgress = () => {} }) {
+  async function edit({ id, dir, name, message, history = [], consoleErrors = [], onProgress = () => {} }) {
     onProgress({ phase: 'reading', id })
 
     let listing = []
@@ -387,6 +398,7 @@ export function createEditor({ runAgent }) {
 
     const prompt = [
       message,
+      consoleSection(consoleErrors),
       '',
       `The app is "${name ?? id}". Files on disk:`,
       listing.length ? listing.join('\n') : '(none)',

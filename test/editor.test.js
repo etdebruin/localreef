@@ -213,4 +213,44 @@ test('createEditor', async (t) => {
     assert.equal(result.ok, false)
     assert.match(result.error, /cannot read/i)
   })
+
+  // "The button doesn't work" plus the actual exception is a surgical fix;
+  // without it the model is deducing. The shell captures frame errors — an
+  // edit turn hands over whatever it has.
+  await t.test('gives the model captured console errors alongside the message', async () => {
+    const dir = await appOnDisk({ 'index.html': 'x' })
+    let seen = null
+
+    const runAgent = async (args) => {
+      seen = args
+      return said('Fixed the null lookup.')
+    }
+
+    await createEditor({ runAgent }).edit({
+      id: 'first-chair',
+      dir,
+      message: 'the log weight button does nothing',
+      consoleErrors: ["Uncaught TypeError: Cannot read properties of null (index.html:212)"],
+    })
+
+    assert.match(seen.prompt, /console/i)
+    assert.match(seen.prompt, /Uncaught TypeError/)
+    assert.match(seen.prompt, /the log weight button does nothing/)
+    await fs.rm(dir, { recursive: true, force: true })
+  })
+
+  // No captured errors -> no empty evidence section confusing the model.
+  await t.test('omits the console section when there is nothing captured', async () => {
+    const dir = await appOnDisk({ 'index.html': 'x' })
+    let seen = null
+
+    const runAgent = async (args) => {
+      seen = args
+      return said('ok')
+    }
+
+    await createEditor({ runAgent }).edit({ id: 'a', dir, message: 'hi' })
+    assert.doesNotMatch(seen.prompt, /console/i)
+    await fs.rm(dir, { recursive: true, force: true })
+  })
 })
