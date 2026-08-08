@@ -237,6 +237,12 @@ bind, so drags stopped working entirely, and it also routed `pointerup` away fro
 close button — which is why the X did nothing. A drag must additionally ignore
 `pointerdown` originating on a control inside the handle.
 
+**The empty canvas is deliberate.** With nothing running you get the wallpaper, the
+title, and the dock — no widgets, no recents, no getting-started panel. This is a
+decision, not an omission: the canvas is window space, and filling it with shell
+furniture would mean the shell competing with the apps for the screen it exists to
+give them. Leave it empty.
+
 **Focus is also a visual state, not only a z-index.** Raising a window used to be
 the entire focus model, which meant nothing on screen said which window your
 keystrokes were going to. The front window now carries a `focused` class: the
