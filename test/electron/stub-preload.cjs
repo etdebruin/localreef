@@ -5,6 +5,7 @@ const { contextBridge } = require('electron')
 // Preload runs in the isolated world, so it cannot set a main-world global for
 // the test to read. Keep it here and hand it back through the bridge instead.
 let savedSettings = null
+let hasApiKey = true
 
 // Mirrors src/core/backgrounds.js closely enough to exercise both kinds.
 const BACKGROUNDS = [
@@ -77,13 +78,18 @@ contextBridge.exposeInMainWorld('reef', {
     appsFolder: '/tmp/projects',
     // The real bridge never returns the key itself, only whether one exists.
     anthropicApiKey: null,
-    hasApiKey: true,
+    hasApiKey,
     apiKeyFromEnvironment: false,
   }),
   // Record what the renderer sent so the test can assert on the payload.
   updateSettings: async (patch) => {
     savedSettings = patch
+    // Mirrors main: saving a key means there is now a key.
+    if (patch && patch.anthropicApiKey) hasApiKey = true
     return { ok: true, apps: [] }
+  },
+  __setHasApiKey: (value) => {
+    hasApiKey = value
   },
   chooseFolder: async () => ({ ok: false }),
   __savedSettings: () => savedSettings,

@@ -65,6 +65,17 @@ const STATES = {
       return document.querySelectorAll('.window').length
     })()`,
   },
+  'palette-nokey': {
+    description: 'The ⌘K palette with no API key set yet',
+    // Deliberately does NOT clear a saved key — a screenshot tool must not
+    // mutate real settings. Run it with the env var unset instead:
+    //   env -u ANTHROPIC_API_KEY npm run shot -- palette-nokey
+    setup: `(async () => {
+      document.getElementById('new-app')?.click()
+      await new Promise((r) => setTimeout(r, 700))
+      return document.getElementById('palette')?.hidden
+    })()`,
+  },
   settings: {
     description: 'Settings sheet',
     setup: `(async () => {

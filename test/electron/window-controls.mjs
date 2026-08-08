@@ -146,6 +146,45 @@ app.whenReady().then(async () => {
     JSON.stringify(generated),
   )
 
+  // --- hover ---
+  // Driven by a real mouseMove: :hover cannot be triggered from script, so a
+  // programmatic test here would assert nothing at all.
+  const hoverPoint = await centreOf('.dock-app')
+  if (hoverPoint) {
+    win.webContents.sendInputEvent({ type: 'mouseMove', x: hoverPoint.x, y: hoverPoint.y })
+    await wait(220)
+  }
+
+  const hovered = await js(`(() => {
+    const button = document.querySelector('.dock-app')
+    const tile = button?.querySelector('.tile')
+    if (!button || !tile) return null
+    return {
+      lifted: getComputedStyle(button).transform,
+      wobble: getComputedStyle(tile).animationName,
+      escaping: getComputedStyle(button, '::before').animationName,
+    }
+  })()`)
+  check(
+    'hovering swells the bubble',
+    hovered && hovered.lifted !== 'none',
+    JSON.stringify(hovered),
+  )
+  check(
+    'hovering wobbles the surface',
+    hovered?.wobble === 'bubble-wobble',
+    `animation=${hovered?.wobble}`,
+  )
+  check(
+    'hovering releases a bubble',
+    hovered?.escaping === 'bubble-escape',
+    `animation=${hovered?.escaping}`,
+  )
+
+  // Move away so the hover state does not colour anything after this.
+  win.webContents.sendInputEvent({ type: 'mouseMove', x: 20, y: 400 })
+  await wait(200)
+
   // --- open a window from the dock ---
   const iconPoint = await centreOf('.dock-app')
   check('the app appears in the dock', Boolean(iconPoint))
@@ -467,6 +506,74 @@ app.whenReady().then(async () => {
 
   const closedByEsc = await js(`document.getElementById('settings').hidden`)
   check('escape closes settings', closedByEsc === true, `hidden=${closedByEsc}`)
+
+  // --- the palette asks for a key before it asks for work ---
+  // The old flow let you type a description, press Enter, and only then said
+  // "no API key" — the work was done and thrown away.
+  await js(`window.reef.__setHasApiKey(false); true`)
+  const paletteBtn = await centreOf('#new-app')
+  if (paletteBtn) await clickAt(paletteBtn)
+  await wait(400)
+
+  const keyMode = await js(`(() => {
+    const input = document.getElementById('prompt')
+    const hint = document.getElementById('palette-hint')
+    return {
+      open: !document.getElementById('palette').hidden,
+      type: input.type,
+      placeholder: input.placeholder,
+      hintShown: !hint.hidden,
+      mentionsKey: hint.textContent.includes('Anthropic API key'),
+      enterLabel: document.getElementById('palette-enter').textContent,
+    }
+  })()`)
+  check('⌘K opens', keyMode?.open === true, JSON.stringify(keyMode))
+  check(
+    'with no key it asks for the key, not for a description',
+    keyMode?.type === 'password' && keyMode.placeholder.startsWith('sk-ant'),
+    JSON.stringify(keyMode),
+  )
+  check(
+    'it explains why rather than erroring',
+    keyMode?.hintShown === true && keyMode.mentionsKey === true,
+    JSON.stringify(keyMode),
+  )
+  check("the ↵ hint says what Enter will do", keyMode?.enterLabel === 'save key', keyMode?.enterLabel)
+
+  // Typing a key and pressing Enter should save it and continue, not build.
+  await js(`document.getElementById('prompt').value = 'sk-ant-typed-in-the-palette'; true`)
+  win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Return' })
+  win.webContents.sendInputEvent({ type: 'char', keyCode: '\r' })
+  win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Return' })
+  await wait(500)
+
+  const afterSave = await js(`(() => {
+    const input = document.getElementById('prompt')
+    return {
+      saved: window.reef.__savedSettings()?.anthropicApiKey ?? null,
+      type: input.type,
+      placeholder: input.placeholder,
+      value: input.value,
+      enterLabel: document.getElementById('palette-enter').textContent,
+      hintShown: !document.getElementById('palette-hint').hidden,
+    }
+  })()`)
+  check(
+    'Enter saves the key',
+    afterSave?.saved === 'sk-ant-typed-in-the-palette',
+    JSON.stringify(afterSave),
+  )
+  check(
+    'and the same box becomes the build prompt',
+    afterSave?.type === 'text' && afterSave.value === '' && afterSave.enterLabel === 'build',
+    JSON.stringify(afterSave),
+  )
+  check('the key explainer goes away', afterSave?.hintShown === false)
+
+  win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' })
+  win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' })
+  await wait(250)
+
 
   const failed = results.filter((r) => !r.passed)
   console.log(`\n${results.length - failed.length}/${results.length} passed`)

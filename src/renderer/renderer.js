@@ -372,13 +372,61 @@ async function openApp(app) {
 const paletteEl = document.getElementById('palette')
 const promptEl = document.getElementById('prompt')
 const progressEl = document.getElementById('progress')
+const paletteHintEl = document.getElementById('palette-hint')
+const paletteEnterEl = document.getElementById('palette-enter')
 let generating = false
 
-function openPalette() {
+/**
+ * 'build' or 'key'.
+ *
+ * Asking for a key *after* someone has described the app they want is the
+ * wrong order: they did the work and got a refusal. If there is no key, the
+ * palette asks for one first, in the same box, and then carries on.
+ */
+let paletteMode = 'build'
+
+function setPaletteMode(mode) {
+  paletteMode = mode
+  const needsKey = mode === 'key'
+
+  paletteHintEl.hidden = !needsKey
+  paletteEnterEl.textContent = needsKey ? 'save key' : 'build'
+  promptEl.type = needsKey ? 'password' : 'text'
+  promptEl.placeholder = needsKey ? 'sk-ant-…' : 'Describe an app to build…'
+}
+
+async function openPalette() {
   paletteEl.hidden = false
   progressEl.replaceChildren()
   promptEl.value = ''
   promptEl.disabled = false
+  promptEl.focus()
+
+  // Optimistically 'build' until we know: the sheet should never flash a
+  // request for credentials at someone who already has them.
+  const settings = await window.reef.getSettings()
+  setPaletteMode(settings.hasApiKey ? 'build' : 'key')
+  promptEl.focus()
+}
+
+async function saveKeyFromPalette() {
+  const key = promptEl.value.trim()
+  if (!key) return
+
+  promptEl.disabled = true
+  const result = await window.reef.updateSettings({ anthropicApiKey: key })
+  promptEl.disabled = false
+
+  if (!result.ok) {
+    progressLine('Could not save that key', { icon: '×', className: 'err' })
+    promptEl.focus()
+    return
+  }
+
+  promptEl.value = ''
+  setPaletteMode('build')
+  progressEl.replaceChildren()
+  progressLine('Key saved on this machine. Now, what should it build?', { icon: '✓' })
   promptEl.focus()
 }
 
@@ -422,10 +470,6 @@ async function build() {
   progressLine(`Built ${result.id}`, { icon: '✓' })
   await renderDock()
 
-// Paint the saved wallpaper. The CSS default covers the frame before this
-// resolves, so there is no flash of empty canvas.
-window.reef.getSettings().then((settings) => applyBackground(settings.background))
-
   // Give the success line a beat to register before the app takes over.
   setTimeout(async () => {
     paletteEl.hidden = true
@@ -443,7 +487,8 @@ window.reef.onGenerating(({ phase, file }) => {
 promptEl.addEventListener('keydown', (event) => {
   if (event.key === 'Enter') {
     event.preventDefault()
-    build()
+    if (paletteMode === 'key') saveKeyFromPalette()
+    else build()
   }
 })
 

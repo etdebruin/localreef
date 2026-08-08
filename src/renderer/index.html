@@ -133,8 +133,66 @@
         transform-origin: bottom center;
         transition: transform 140ms cubic-bezier(0.2, 0.8, 0.3, 1.2);
       }
-      .dock-app:hover { transform: scale(1.18) translateY(-2px); }
-      .dock-app:active { transform: scale(1.04); }
+      /* Hover: swell and lift. The transition (not an animation) carries both
+         directions, so leaving is as smooth as arriving. */
+      .dock-app:hover { transform: scale(1.16) translateY(-5px); }
+      .dock-app:active { transform: scale(1.05) translateY(-1px); }
+
+      /* Surface tension.
+         A deliberate exception to "no bounce": this is not a springy easing
+         curve bolted onto a button, it is the one thing a bubble actually does
+         when you disturb it. Two half-cycles and it settles — squash wide,
+         overshoot narrow, rest. On the tile rather than the button so it does
+         not fight the hover transform above. */
+      @keyframes bubble-wobble {
+        0%   { transform: scale(1, 1); }
+        28%  { transform: scale(1.07, 0.93); }
+        58%  { transform: scale(0.97, 1.035); }
+        80%  { transform: scale(1.012, 0.99); }
+        100% { transform: scale(1, 1); }
+      }
+      .dock-app:hover .tile,
+      .dock-btn:hover { animation: bubble-wobble 420ms cubic-bezier(0.25, 0.9, 0.3, 1); }
+
+      /* The rim catches more light as it comes toward you. */
+      .dock-app .tile::after { transition: opacity 180ms ease, filter 180ms ease; }
+      .dock-app:hover .tile::after { filter: brightness(1.25) saturate(1.1); }
+
+      /* Two small bubbles escape upward. Staggered, and scaled by how far they
+         drift so the further one reads as smaller and further away. */
+      @keyframes bubble-escape {
+        0%   { transform: translate(0, 4px) scale(0.35); opacity: 0; }
+        18%  { opacity: 0.8; }
+        70%  { opacity: 0.5; }
+        100% { transform: translate(var(--drift), -40px) scale(1); opacity: 0; }
+      }
+      .dock-app::before,
+      .dock-app::after {
+        content: '';
+        position: absolute;
+        top: 6px;
+        border-radius: 50%;
+        pointer-events: none;
+        opacity: 0;
+        background:
+          radial-gradient(circle at 34% 30%, rgba(255,255,255,0.95) 0%, transparent 32%),
+          radial-gradient(circle at 50% 50%, transparent 52%, rgba(255,255,255,0.7) 96%);
+      }
+      .dock-app::before { left: 30%; width: 7px; height: 7px; --drift: -9px; }
+      .dock-app::after  { left: 62%; width: 5px; height: 5px; --drift: 7px; }
+      .dock-app:hover::before { animation: bubble-escape 1100ms ease-out 60ms; }
+      .dock-app:hover::after  { animation: bubble-escape 1300ms ease-out 260ms; }
+
+      /* Motion here is decoration, however apt. If the user has asked for less
+         of it, the swell alone still communicates the hover. */
+      @media (prefers-reduced-motion: reduce) {
+        .dock-app:hover .tile,
+        .dock-btn:hover,
+        .dock-app:hover::before,
+        .dock-app:hover::after {
+          animation: none;
+        }
+      }
 
       /* --- App bubbles ----------------------------------------------------
          These were squares, on the reasoning that fixed geometry is what makes
@@ -453,7 +511,7 @@
         transition: transform 160ms cubic-bezier(0.2, 0.8, 0.3, 1.2), box-shadow 160ms ease;
       }
             .dock-btn:hover {
-        transform: translateY(-3px) scale(1.06);
+        transform: translateY(-4px) scale(1.07);
         box-shadow:
           inset 0 0 12px rgba(255, 255, 255, 0.26),
           inset 0 -6px 14px rgba(120, 200, 230, 0.14),
@@ -541,6 +599,18 @@
         font: inherit; font-size: 11px;
         color: var(--text);
       }
+      /* The lead-in when no key is set. Quiet: it explains rather than warns,
+         because not having configured something yet is not an error. */
+      #palette-hint {
+        padding: 16px 20px 0;
+        color: var(--muted);
+        font-size: 12.5px;
+        line-height: 1.55;
+        max-width: 60ch;
+      }
+      #palette-hint[hidden] { display: none; }
+      #palette-hint strong { color: var(--text); font-weight: 560; }
+
       #progress { padding: 0 20px; }
       #progress:empty { display: none; }
       #progress .line {
@@ -689,6 +759,11 @@
 
       <div id="palette" hidden>
         <div class="sheet">
+          <div id="palette-hint" hidden>
+            <strong>⌘K builds apps with Claude.</strong>
+            Paste an Anthropic API key to begin — it stays on this machine, and
+            you can change it later in Settings.
+          </div>
           <input
             id="prompt"
             type="text"
@@ -698,7 +773,7 @@
           />
           <div id="progress"></div>
           <div class="foot">
-            <kbd>↵</kbd><span>build</span>
+            <kbd>↵</kbd><span id="palette-enter">build</span>
             <kbd>esc</kbd><span>close</span>
           </div>
         </div>
