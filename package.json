@@ -29,7 +29,7 @@
     "test": "node --test 'test/**/*.test.js'",
     "lint": "eslint .",
     "test:electron": "electron test/electron/iframe-auth.mjs",
-    "test:electron:ui": "electron test/electron/window-controls.mjs",
+    "test:electron:ui": "electron test/electron/window-controls.mjs && electron test/electron/edit-pane.mjs",
     "test:vite": "node test/vite/hmr.mjs",
     "shot": "node scripts/shot.mjs",
     "test:electron:ws": "electron test/electron/iframe-websocket.mjs",

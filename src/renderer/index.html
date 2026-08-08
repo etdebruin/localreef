@@ -409,6 +409,10 @@
         transition: color 130ms ease, transform 130ms ease, filter 130ms ease;
       }
       .titlebar button + button { margin-left: 8px; }
+      /* Blue edits it — only reef-built apps carry this one at all. */
+      .titlebar button.edit {
+        background: radial-gradient(circle at 34% 28%, #a9c9ff 0%, #5487e0 70%);
+      }
       .titlebar button.minimize {
         background: radial-gradient(circle at 34% 28%, #ffdf9b 0%, #f0a93c 70%);
       }
@@ -426,8 +430,109 @@
          minimizing set the attribute and changed nothing on screen. */
       .window[hidden] { display: none; }
 
-      .window .body { flex: 1; position: relative; background: #fff; }
+      /* The body is a row: the stage (spinner, crash panel, or the app's
+         iframe) plus, for a reef-built app in edit mode, the chat sidecar.
+         Everything that used to anchor to the body — the absolute .state, the
+         white app background — anchors to the stage now. */
+      .window .body { flex: 1; display: flex; min-height: 0; }
+      .window .stage { flex: 1; position: relative; background: #fff; min-width: 0; }
       .window iframe { width: 100%; height: 100%; border: 0; display: block; }
+
+      /* Room for the app plus the chat; resizing can't crush either. */
+      .window.editing { min-width: 680px; }
+
+      .chat {
+        flex: 0 0 360px;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        border-left: 1px solid var(--line);
+        background: var(--surface);
+      }
+      .chat-head {
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 9px 12px;
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--muted);
+        border-bottom: 1px solid var(--line);
+      }
+      .chat-close {
+        border: 0; background: none; padding: 0 2px;
+        color: var(--muted); font-size: 14px; line-height: 1;
+        cursor: pointer;
+      }
+      .chat-close:hover { color: var(--text); }
+      .chat-log {
+        flex: 1;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 12px;
+      }
+      .msg {
+        max-width: 88%;
+        padding: 7px 10px;
+        border-radius: 11px;
+        font-size: 12.5px;
+        line-height: 1.45;
+        color: var(--text);
+        white-space: pre-wrap;
+        overflow-wrap: break-word;
+      }
+      .msg.user {
+        align-self: flex-end;
+        background: rgba(110, 168, 254, 0.16);
+        border: 1px solid rgba(110, 168, 254, 0.28);
+      }
+      .msg.assistant {
+        align-self: flex-start;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid var(--line);
+      }
+      .msg.err {
+        align-self: flex-start;
+        border: 1px solid rgba(255, 123, 114, 0.4);
+        background: rgba(255, 123, 114, 0.1);
+        color: var(--danger);
+      }
+      /* Same voice as the palette's progress line. */
+      .chat-progress { color: var(--muted); font-size: 11.5px; padding: 0 2px; }
+      .chat-form {
+        flex: 0 0 auto;
+        display: flex;
+        gap: 8px;
+        padding: 10px 12px;
+        border-top: 1px solid var(--line);
+      }
+      .chat-input {
+        flex: 1;
+        min-width: 0;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        padding: 7px 10px;
+        font: inherit; font-size: 12.5px;
+        color: var(--text);
+      }
+      .chat-input:focus { outline: none; border-color: var(--accent); }
+      .chat-input:disabled { opacity: 0.55; }
+      .chat-send {
+        flex: 0 0 auto;
+        width: 30px;
+        border: 1px solid var(--accent);
+        background: rgba(110, 168, 254, 0.12);
+        border-radius: 9px;
+        color: var(--text);
+        font-size: 13px;
+        cursor: pointer;
+      }
+      .chat-send:hover:not(:disabled) { background: rgba(110, 168, 254, 0.2); }
+      .chat-send:disabled { opacity: 0.55; cursor: default; }
 
       .state {
         position: absolute; inset: 0;

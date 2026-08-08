@@ -22,7 +22,8 @@ import { allowsMedia, framePolicy } from '../core/policy.js'
 import { createSupervisor } from './supervisor.js'
 import { createGateway } from '../gateway/index.js'
 import { AUTH_PARAM, AUTH_HEADER } from '../gateway/auth.js'
-import { MODELS, createGenerator, createFixer, createClaudeRunner } from './agent.js'
+import { MODELS, createGenerator, createFixer, createEditor, createClaudeRunner } from './agent.js'
+import { createWatcher } from './watcher.js'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const projectRoot = path.resolve(here, '../..')
@@ -56,13 +57,38 @@ const supervisor = createSupervisor({
   resolveApiKey: async () => resolveApiKey(await settings.read()),
 })
 
-/** Curated directories: bundled samples, plus whatever ⌘K has generated. */
-function appDirectories() {
-  return [path.join(projectRoot, 'apps'), path.join(app.getPath('userData'), 'apps')]
-}
+// Folder watching for open static apps: an edit — from the ⌘K chat or the
+// user's own editor — reloads the frame. Server apps are never watched; their
+// dev servers own reload (Vite HMR rides the gateway's WebSocket relay).
+const watcher = createWatcher({
+  onChange: (id) => mainWindow?.webContents.send('apps:changed', { id }),
+})
+
+// Edit-chat conversations, per app, in memory only — the durable state is the
+// files. History is appended only after a successful turn (a refusal or error
+// leaves it untouched so the user can rephrase) and dies with the window.
+const editSessions = new Map()
+const editBusy = new Set()
+// Bumped on teardown so a turn racing a window close can't resurrect the
+// session it was started under.
+const editEpoch = new Map()
+
+/** How many past messages an edit turn carries. Disk is the real state, so
+ * truncating old turns costs continuity, never correctness. */
+const EDIT_HISTORY_LIMIT = 24
 
 async function refreshApps() {
-  const curated = await Promise.all(appDirectories().map((dir) => scanApps(dir)))
+  const bundled = await scanApps(path.join(projectRoot, 'apps'))
+
+  // Apps ⌘K built. The flag derives from where the folder lives — not from
+  // anything in the folder — so a copied or linked app can't claim it, and a
+  // linked folder shadowing the same id loses it in the later-wins merge.
+  // `generated` is what gates the edit chat: reef owns these folders, so the
+  // agent may edit them freely; everything else is somebody's real checkout.
+  const generated = (await scanApps(path.join(app.getPath('userData'), 'apps'))).map((a) => ({
+    ...a,
+    generated: true,
+  }))
 
   // The user's own projects folder. Discovery here is opt-in — only folders
   // carrying a reef.json — because it is a working directory, not a
@@ -79,7 +105,8 @@ async function refreshApps() {
   // explicit: a bundled sample yields to a generated app, which yields to one
   // found in your projects folder, which yields to a folder you linked by hand.
   const all = [
-    ...curated.flat(),
+    ...bundled,
+    ...generated,
     ...discovered.map((a) => ({ ...a, discovered: true })),
     ...linked.map((a) => ({ ...a, linked: true })),
   ]
@@ -133,6 +160,7 @@ function serialise(record) {
     dir: record.dir,
     linked: record.linked ?? false,
     discovered: record.discovered ?? false,
+    generated: record.generated ?? false,
     name: record.name,
     icon: record.icon,
     tile: tileFor(record),
@@ -304,6 +332,10 @@ ipcMain.handle('apps:launch', async (_event, id) => {
     return { ok: false, error: state.error ?? 'Failed to start', logs: state.logs }
   }
 
+  // Watch record.dir, not record.root: root can be a build output (dist/),
+  // and edits land in the source folder.
+  if (record.type === 'static') watcher.watch(id, record.dir)
+
   return {
     ok: true,
     url: urlFor(id, { withToken: true }),
@@ -315,7 +347,13 @@ ipcMain.handle('apps:launch', async (_event, id) => {
   }
 })
 
+// The single teardown hook: the renderer calls this for every window close
+// (static apps included — supervisor.stop is a no-op for them), so anything
+// scoped to "this app is open" dies here.
 ipcMain.handle('apps:stop', async (_event, id) => {
+  watcher.unwatch(id)
+  editSessions.delete(id)
+  editEpoch.set(id, (editEpoch.get(id) ?? 0) + 1)
   await supervisor.stop(id)
   return { ok: true }
 })
@@ -428,7 +466,60 @@ ipcMain.handle('apps:fix', async (_event, id) => {
   return result
 })
 
+// One conversational turn of the edit chat. The provenance gate lives HERE,
+// not only in the renderer: the fixer's linked-folder confirm is renderer-only
+// and that is acceptable for a repair the user explicitly clicked, but edit
+// turns write on every message — main must refuse folders reef does not own.
+ipcMain.handle('apps:edit', async (_event, { id, message } = {}) => {
+  const record = apps.get(id)
+  if (!record) return { ok: false, error: `No app called "${id}"` }
+  if (!record.generated) return { ok: false, error: 'Only apps built with ⌘K can be edited here.' }
+  if (!String(message ?? '').trim()) return { ok: false, error: 'Say what to change.' }
+  if (editBusy.has(id)) return { ok: false, error: 'Still applying the last change.' }
+
+  const apiKey = resolveApiKey(await settings.read())
+  if (!apiKey) return { ok: false, error: NO_KEY }
+
+  editBusy.add(id)
+  const epoch = editEpoch.get(id) ?? 0
+  try {
+    const history = editSessions.get(id) ?? []
+    const editor = createEditor({ runAgent: createClaudeRunner({ apiKey, model: MODELS.edit }) })
+
+    const result = await editor.edit({
+      id,
+      dir: record.dir,
+      name: record.name,
+      message,
+      history,
+      // Every event carries the id so concurrent edit sessions cannot cross
+      // streams — the palette-era 'thinking' event never had one.
+      onProgress: (progress) => mainWindow?.webContents.send('apps:editing', { ...progress, id }),
+    })
+
+    if (result.ok && (editEpoch.get(id) ?? 0) === epoch) {
+      editSessions.set(
+        id,
+        [
+          ...history,
+          { role: 'user', content: message },
+          { role: 'assistant', content: result.reply },
+        ].slice(-EDIT_HISTORY_LIMIT),
+      )
+      // The turn may have renamed the app or changed its icon.
+      await refreshApps()
+    }
+
+    // No forced reload here: the watcher sees the writes and the frame
+    // reloads through the same path as any other file change.
+    return result
+  } finally {
+    editBusy.delete(id)
+  }
+})
+
 async function shutdown() {
+  watcher.close()
   await supervisor.stopAll()
   await gateway?.close()
 }

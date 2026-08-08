@@ -112,7 +112,7 @@ app.whenReady().then(async () => {
     }
   }))()`)
 
-  check('every app has a tile', Array.isArray(tiles) && tiles.length === 2, JSON.stringify(tiles))
+  check('every app has a tile', Array.isArray(tiles) && tiles.length === 3, JSON.stringify(tiles))
   check(
     'every tile is a circle',
     tiles.length > 0 && tiles.every((t) => t.w === t.h && t.w > 0 && t.radius === '50%'),

@@ -35,6 +35,15 @@ the ledger.
   feared risk materialised — no host-check rejection, and the HMR client's URL
   survives proxying. Two *unforeseen* bugs did: Vite binds IPv6 loopback only,
   and `host` was not threaded to the proxy.
+- **M5 — edit live.** A chat pane beside any ⌘K-built app (and only those —
+  provenance is the `generated` flag, derived from the folder living in
+  `userData/apps`, enforced in main). Multi-turn: the conversation lives in
+  main, text turns only, and dies with the window; the files are the real
+  state. Every open static app's folder is watched (`src/main/watcher.js`) and
+  the frame reloads on change — chat edits and external-editor edits alike;
+  server apps keep their own HMR. Deferred: restart-on-edit for HMR-less
+  server apps (a manifest opt-in, someday); the titlebar name goes stale if a
+  turn renames the app (dock updates, reopen fixes the title).
 
 ---
 
@@ -81,8 +90,6 @@ to be every app's WebSocket failing.)*
 
 ## Not built yet
 
-- **M5 — edit live.** Side-by-side app + chat, folder watch, hot reload. The
-  generator and fixer already exist; this is the loop around them.
 - **The `reef.*` SDK bridge.** `reef.storage`, `reef.ai`, `reef.window`
   — designed in DESIGN.md §7, no code yet. `reef.ai` is the notable one: it
   lets generated apps call a model without the user pasting a key into each app.

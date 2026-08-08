@@ -426,7 +426,7 @@ Say so explicitly rather than implying a sandbox we haven't earned.
 
 ## 11. Build order
 
-*Status as built: M1–M4 done, M5 not started. Current ledger: [TODO.md](./TODO.md).*
+*Status as built: M1–M5 done. Current ledger: [TODO.md](./TODO.md).*
 
 **M1 — The mechanic works.** Gateway + resolver pin + registry. Two sample apps: one
 static, one Vite. Click an icon, it opens, HMR works. No canvas yet.

@@ -40,8 +40,9 @@ const BACKGROUNDS = [
 ]
 
 contextBridge.exposeInMainWorld('reef', {
-  // Two apps so the tile modes are both exercised: one declaring an emoji,
-  // one declaring nothing and falling back to a generated tile.
+  // Three apps: one declaring an emoji, one declaring nothing and falling
+  // back to a generated tile, and one ⌘K-built — the only one whose window
+  // may carry the edit affordance.
   listApps: async () => [
     {
       id: 'probe',
@@ -51,6 +52,7 @@ contextBridge.exposeInMainWorld('reef', {
       type: 'static',
       status: 'stopped',
       linked: false,
+      generated: false,
     },
     {
       id: 'feed-reader',
@@ -60,6 +62,17 @@ contextBridge.exposeInMainWorld('reef', {
       type: 'static',
       status: 'stopped',
       linked: false,
+      generated: false,
+    },
+    {
+      id: 'doodle',
+      name: 'Doodle',
+      icon: null,
+      tile: { kind: 'generated', image: null, glyph: null, initials: 'D', hue: 96 },
+      type: 'static',
+      status: 'stopped',
+      linked: false,
+      generated: true,
     },
   ],
   // about:blank keeps the iframe from needing a live origin; the window
@@ -68,6 +81,8 @@ contextBridge.exposeInMainWorld('reef', {
   stop: async () => ({ ok: true }),
   reveal: async () => ({ ok: true }),
   generate: async () => ({ ok: false, error: 'stubbed' }),
+  fix: async () => ({ ok: false, error: 'stubbed' }),
+  edit: async ({ id } = {}) => ({ ok: true, id, files: ['index.html'], reply: 'Done.' }),
   link: async () => ({ ok: true, linked: 0, errors: [] }),
   unlink: async () => ({ ok: true }),
   pathForFile: () => null,
@@ -96,4 +111,7 @@ contextBridge.exposeInMainWorld('reef', {
 
   onState: () => () => {},
   onGenerating: () => () => {},
+  onFixing: () => () => {},
+  onEditing: () => () => {},
+  onChanged: () => () => {},
 })

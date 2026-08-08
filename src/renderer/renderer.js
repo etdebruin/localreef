@@ -13,7 +13,7 @@ const windowsEl = document.getElementById('windows')
 const shieldEl = document.getElementById('shield')
 const refreshEl = document.getElementById('refresh')
 
-/** id -> { el, body, app, minimized } */
+/** id -> { el, body, stage, app, minimized, frame?, url?, chat? } */
 const openWindows = new Map()
 
 /** id -> dock button, so run state can be updated without a full re-render. */
@@ -137,9 +137,10 @@ function closeWindow(id) {
   if (!win) return
   win.el.remove()
   openWindows.delete(id)
-  // Static apps have no process; stopping a server app frees it immediately
-  // rather than waiting out keepAlive, which is the right call for M1.
-  if (win.app.type && win.app.type !== 'static') window.reef.stop(id)
+  // Every close tells main, static apps included: stop is the teardown hook
+  // for anything scoped to "this app is open" — the process for a server app,
+  // and the folder watcher and edit conversation for everything.
+  window.reef.stop(id)
 
   // Hand focus to whatever is now highest, so closing the front window does
   // not leave every remaining one looking inactive.
@@ -180,7 +181,11 @@ function restoreWindow(id) {
 function makeWindow(app) {
   const offset = (cascade++ % 6) * 28
 
-  const body = h('div', { className: 'body' })
+  // The stage holds whatever the window shows — spinner, crash panel, or the
+  // app's iframe. It exists so those can be swapped without touching anything
+  // else living in the body, like the edit chat.
+  const stage = h('div', { className: 'stage' })
+  const body = h('div', { className: 'body' }, stage)
   const titlebar = h(
     'div',
     { className: 'titlebar' },
@@ -188,6 +193,14 @@ function makeWindow(app) {
     h('span', { className: 'name', textContent: app.name }),
     h('span', { className: 'spacer' }),
   )
+
+  // Only reef-built apps carry the edit chat: everything else on the desktop
+  // is somebody's real checkout, and main refuses to edit those anyway.
+  if (app.generated) {
+    const edit = h('button', { className: 'edit', title: 'Edit with AI', textContent: '✎' })
+    edit.addEventListener('click', () => toggleEditPane(app.id))
+    titlebar.append(edit)
+  }
 
   const minimize = h('button', { className: 'minimize', title: 'Minimize', textContent: '–' })
   minimize.addEventListener('click', () => minimizeWindow(app.id))
@@ -221,7 +234,7 @@ function makeWindow(app) {
   }, () => ({ width: el.offsetWidth, height: el.offsetHeight }))
 
   windowsEl.append(el)
-  return { el, body }
+  return { el, body, stage }
 }
 
 /**
@@ -293,20 +306,22 @@ function fixPanel(win, app, onDone) {
     textContent: app.dir ? `edits ${homeShort(app.dir)}` : '',
   })
 
-  let armed = !app.linked
+  // Discovered apps are found in the user's projects folder, so they are as
+  // much a real checkout as a linked one — both take the second click.
+  let armed = !(app.linked || app.discovered)
 
   button.addEventListener('click', async () => {
     if (!armed) {
       armed = true
       button.textContent = `Edit my project at ${homeShort(app.dir)}?`
       button.classList.add('confirm')
-      note.textContent = 'This is a linked folder — files will change on disk. Click again to confirm.'
+      note.textContent = 'This is your project folder — files will change on disk. Click again to confirm.'
       return
     }
 
     const log = h('div', { className: 'fix-log' })
     showState(
-      win.body,
+      win.stage,
       h('div', { className: 'spinner' }),
       h('div', { textContent: 'Reading the app and the error…' }),
       log,
@@ -321,7 +336,7 @@ function fixPanel(win, app, onDone) {
 
     if (!result.ok) {
       showState(
-        win.body,
+        win.stage,
         h('div', { className: 'err', textContent: 'Could not fix it' }),
         h('div', { textContent: result.error ?? '' }),
       )
@@ -329,7 +344,7 @@ function fixPanel(win, app, onDone) {
     }
 
     showState(
-      win.body,
+      win.stage,
       h('div', { className: 'spinner' }),
       h('div', { textContent: `Fixed ${result.files.join(', ')} — restarting…` }),
     )
@@ -361,7 +376,7 @@ async function openApp(app) {
 
   if (app.status === 'broken') {
     showState(
-      win.body,
+      win.stage,
       h('div', { className: 'err', textContent: 'This app could not be read' }),
       h('pre', { textContent: app.error ?? 'Unknown error' }),
       fixPanel(win, app, () => reopen(app.id)),
@@ -370,7 +385,7 @@ async function openApp(app) {
   }
 
   showState(
-    win.body,
+    win.stage,
     h('div', { className: 'spinner' }),
     h('div', { textContent: app.type === 'static' ? 'Opening…' : 'Starting server…' }),
   )
@@ -382,7 +397,7 @@ async function openApp(app) {
 
   if (!result.ok) {
     showState(
-      win.body,
+      win.stage,
       h('div', { className: 'err', textContent: 'Failed to start' }),
       h('div', { textContent: result.error ?? '' }),
       result.logs?.length ? h('pre', { textContent: result.logs.join('\n') }) : null,
@@ -394,10 +409,100 @@ async function openApp(app) {
   // `allow` comes from main, derived from the app's manifest. Without it
   // Permissions Policy denies the frame the microphone and camera outright —
   // getUserMedia rejects before the user is ever asked.
-  win.body.replaceChildren(
-    h('iframe', { src: result.url, title: app.name, allow: result.allow ?? '' }),
-  )
+  win.url = result.url
+  win.frame = h('iframe', { src: result.url, title: app.name, allow: result.allow ?? '' })
+  win.stage.replaceChildren(win.frame)
 }
+
+// ------------------------------------------------------------- edit chat
+
+const bubble = (kind, text) => h('div', { className: `msg ${kind}`, textContent: text })
+
+/**
+ * The chat pane beside a reef-built app. The conversation itself lives in
+ * main and survives the pane being toggled; only closing the window ends it.
+ * The pane widens the window rather than squeezing the app — the app is the
+ * point, the chat is a sidecar.
+ */
+function toggleEditPane(id) {
+  const win = openWindows.get(id)
+  if (!win) return
+  if (win.chat) return closeEditPane(win)
+
+  const log = h('div', { className: 'chat-log' })
+  const input = h('input', { className: 'chat-input', placeholder: 'Describe a change…' })
+  const send = h('button', { className: 'chat-send', type: 'submit', textContent: '↑' })
+  const form = h('form', { className: 'chat-form' }, input, send)
+  const paneClose = h('button', { className: 'chat-close', title: 'Hide chat', textContent: '×' })
+  const aside = h(
+    'aside',
+    { className: 'chat' },
+    h('div', { className: 'chat-head' }, h('span', { textContent: 'Edit with AI' }), paneClose),
+    log,
+    form,
+  )
+
+  paneClose.addEventListener('click', () => closeEditPane(win))
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault()
+    const message = input.value.trim()
+    if (!message || input.disabled) return
+
+    input.value = ''
+    input.disabled = true
+    send.disabled = true
+    log.append(bubble('user', message))
+    const progress = h('div', { className: 'chat-progress', textContent: 'Reading the app…' })
+    log.append(progress)
+    log.scrollTop = log.scrollHeight
+
+    const result = await window.reef.edit({ id, message })
+
+    progress.remove()
+    log.append(
+      result.ok
+        ? bubble('assistant', result.reply || 'Done.')
+        : bubble('err', result.error ?? 'Something went wrong — the app may be part-changed.'),
+    )
+    log.scrollTop = log.scrollHeight
+    input.disabled = false
+    send.disabled = false
+    input.focus()
+  })
+
+  win.chat = aside
+  win.el.classList.add('editing')
+  // Give the chat its own room instead of taking it from the app.
+  win.el.style.width = `${Math.min(window.innerWidth - win.el.offsetLeft - 16, win.el.offsetWidth + 360)}px`
+  win.body.append(aside)
+  input.focus()
+}
+
+function closeEditPane(win) {
+  if (!win.chat) return
+  win.chat.remove()
+  win.chat = null
+  win.el.classList.remove('editing')
+  win.el.style.width = `${Math.max(320, win.el.offsetWidth - 360)}px`
+}
+
+// Progress for whichever window's turn is running — every event carries the
+// app id, so concurrent sessions cannot cross streams.
+window.reef.onEditing(({ id, phase, file }) => {
+  const line = openWindows.get(id)?.chat?.querySelector('.chat-progress')
+  if (!line) return
+  if (phase === 'thinking') line.textContent = 'Thinking…'
+  if (phase === 'writing') line.textContent = `Rewriting ${file}…`
+})
+
+// A change on disk — from an edit turn or the user's own editor — reloads the
+// frame. Re-navigation, not reload(): the frame is cross-origin, and the
+// gateway serves no-store so the same URL comes back fresh.
+window.reef.onChanged(({ id }) => {
+  const win = openWindows.get(id)
+  if (win?.frame) win.frame.src = win.url
+})
 
 // ------------------------------------------------------------ ⌘K palette
 
@@ -781,7 +886,7 @@ window.reef.onState(({ id, status, error, logs }) => {
   const win = openWindows.get(id)
   if (win && status === 'crashed') {
     showState(
-      win.body,
+      win.stage,
       h('div', { className: 'err', textContent: 'App crashed' }),
       h('div', { textContent: error ?? '' }),
       logs?.length ? h('pre', { textContent: logs.join('\n') }) : null,

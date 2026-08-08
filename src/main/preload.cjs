@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld('reef', {
   reveal: (id) => ipcRenderer.invoke('apps:reveal', id),
   generate: (prompt) => ipcRenderer.invoke('apps:generate', prompt),
   fix: (id) => ipcRenderer.invoke('apps:fix', id),
+  edit: (payload) => ipcRenderer.invoke('apps:edit', payload),
   link: (paths) => ipcRenderer.invoke('apps:link', paths),
   unlink: (dir) => ipcRenderer.invoke('apps:unlink', dir),
 
@@ -35,4 +36,6 @@ contextBridge.exposeInMainWorld('reef', {
   onState: (callback) => subscribe('apps:state', callback),
   onGenerating: (callback) => subscribe('apps:generating', callback),
   onFixing: (callback) => subscribe('apps:fixing', callback),
+  onEditing: (callback) => subscribe('apps:editing', callback),
+  onChanged: (callback) => subscribe('apps:changed', callback),
 })

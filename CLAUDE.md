@@ -9,7 +9,7 @@ npm start                  # launch the desktop (Electron)
 npm test                   # 276 unit + integration tests
 npm run lint
 npm run test:electron      # iframe auth, needs a real Electron GUI
-npm run test:electron:ui   # dock/window/settings via real Chromium input events
+npm run test:electron:ui   # dock/window/settings + edit pane, real Chromium input
 npm run test:electron:ws   # browser-initiated WebSocket from an app iframe
 npm run test:electron:media # mic/camera Permissions Policy on an app iframe
 npm run test:vite          # real Vite through the gateway, incl. live HMR
@@ -145,6 +145,32 @@ permission-request answer — both gates have to open.
 undeclared app lose the feature. Asserting the attribute is not enough — the
 test asks the frame itself via `document.featurePolicy.allowsFeature`.
 
+**FSEvents lies twice at watcher start.** `fs.watch(dir, {recursive:true})` on
+macOS replays a beat of *pre-watch* history the moment the stream opens — the
+folder's own creation, files written before launch — and separately can report
+events with a `null` filename or the watched directory's own basename.
+`src/main/watcher.js` swallows the settle window after `watch()` and treats
+anonymous events as ignorable; without both, every frame reloaded the moment
+it opened. Tests must use `watchSettled()` (see `test/watcher.test.js`).
+
+**Window content swaps go through `win.stage`, never `win.body`.** The body is
+a row holding the stage plus (for a ⌘K-built app) the edit chat sidecar. A
+`replaceChildren` on the body deletes the chat; `showState()` and the iframe
+swap all target the stage. The `.state` overlay anchors to the stage too.
+
+**Provenance is where the folder lives, not what it claims.** `generated: true`
+is tagged in `refreshApps()` off the `userData/apps` scan — there is no marker
+file, so a copied folder can't claim it and a linked folder shadowing the same
+id loses it. The edit chat is gated on it in **main** (`apps:edit` refuses),
+not only in the renderer; the fixer's confirm-click covers `linked` and
+`discovered` both.
+
+**Edit conversations are text turns only, capped, in memory.** Tool_use and
+thinking blocks are never replayed across turns; the files on disk are the
+state and each turn's prompt carries a fresh listing. History dies with the
+window — `apps:stop` is the single teardown hook (the renderer calls it for
+every window close, static apps included).
+
 **Control characters do not survive being written into source.** A literal ESC
 or NUL gets mangled. Build them with `String.fromCharCode` (see
 `src/core/probe.js` and the null-byte case in `test/paths.test.js`).
@@ -182,9 +208,10 @@ Do not delete either suite as duplication.
 
 ## Agent generation
 
-Models are chosen per task in `MODELS` (`agent.js`): generation and fixing run
-`claude-opus-5` — both edit real files, so wrong costs more than slow — and the
-future ⌘K intent router is pinned to `claude-haiku-4-5`. Haiku rejects
+Models are chosen per task in `MODELS` (`agent.js`): generation, fixing, and
+the edit chat run `claude-opus-5` — all three edit real files, so wrong costs
+more than slow — and the future ⌘K intent router is pinned to
+`claude-haiku-4-5`. Haiku rejects
 `output_config.effort`, so the effort setting is derived from the model
 (`outputConfig()`), not hardcoded. `max_tokens: 32000`, `effort: 'high'` on
 Opus, streaming required. Tuning that was arrived at empirically:
