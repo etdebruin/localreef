@@ -4,7 +4,13 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 
-import { MODELS, createAppTools, createGenerator, outputConfig } from '../src/main/agent.js'
+import {
+  MODELS,
+  buildMessages,
+  createAppTools,
+  createGenerator,
+  outputConfig,
+} from '../src/main/agent.js'
 
 async function tmpDir() {
   return fs.mkdtemp(path.join(os.tmpdir(), 'ld-agent-'))
@@ -186,6 +192,32 @@ test('createGenerator', async (t) => {
     assert.ok(phases.includes('done'), phases.join(','))
     assert.ok(events.some((e) => e.file === 'index.html'))
     await fs.rm(appsDir, { recursive: true, force: true })
+  })
+})
+
+test('buildMessages', async (t) => {
+  await t.test('a first turn is just the prompt', () => {
+    assert.deepEqual(buildMessages([], 'make it blue'), [
+      { role: 'user', content: 'make it blue' },
+    ])
+    assert.deepEqual(buildMessages(undefined, 'p'), [{ role: 'user', content: 'p' }])
+  })
+
+  await t.test('prepends earlier turns verbatim', () => {
+    const history = [
+      { role: 'user', content: 'make it blue' },
+      { role: 'assistant', content: 'Done — the header is blue now.' },
+    ]
+    assert.deepEqual(buildMessages(history, 'darker'), [
+      ...history,
+      { role: 'user', content: 'darker' },
+    ])
+  })
+
+  await t.test('does not mutate the history it was given', () => {
+    const history = [{ role: 'user', content: 'a' }]
+    buildMessages(history, 'b')
+    assert.deepEqual(history, [{ role: 'user', content: 'a' }])
   })
 })
 

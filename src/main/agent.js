@@ -18,9 +18,9 @@ import { slugify, uniqueId } from '../core/slug.js'
 /**
  * One model per task, chosen deliberately rather than one constant for all.
  *
- * `generate` and `fix` both edit real files — for a linked app, the user's
- * actual project — so they stay on Opus: a wrong edit costs more than a slow
- * one. `route` is the v1.5 ⌘K intent classifier ("open an existing app, or
+ * `generate`, `fix`, and `edit` all write real files — for a linked app, the
+ * user's actual project — so they stay on Opus: a wrong edit costs more than
+ * a slow one. `route` is the v1.5 ⌘K intent classifier ("open an existing app, or
  * build one?"); it is a tiny decision felt on every invocation, so it rides
  * the fast tier. No call site uses it yet — it is here so the next one has to
  * pick a tier instead of inheriting whatever generation uses.
@@ -28,6 +28,7 @@ import { slugify, uniqueId } from '../core/slug.js'
 export const MODELS = {
   generate: 'claude-opus-5',
   fix: 'claude-opus-5',
+  edit: 'claude-opus-5',
   route: 'claude-haiku-4-5',
 }
 
@@ -60,6 +61,20 @@ Quality bar:
 - Keyboard basics matter: Enter submits, Escape closes, focus is visible.
 
 Work by calling write_file. When every file is written, stop and say in one sentence what you built.`
+
+/**
+ * The request messages for a turn: earlier turns, then the new prompt.
+ *
+ * History is plain text turns only — user messages and the assistant's final
+ * reply, never tool_use/tool_result or thinking blocks. The files on disk are
+ * the real state and every turn's prompt carries a fresh listing, so replaying
+ * the tool transcript buys nothing and resending thinking blocks is exactly
+ * the kind of block-replay the API is picky about. Text turns sidestep all of
+ * it, and make truncating old history safe.
+ */
+export function buildMessages(history, prompt) {
+  return [...(history ?? []), { role: 'user', content: prompt }]
+}
 
 /** Resolve a model-supplied path against the app root, or refuse it. */
 function resolveWithin(root, candidate) {
@@ -145,6 +160,29 @@ export function createAppTools(dir, { onFile = () => {} } = {}) {
   return { tools, written }
 }
 
+/**
+ * Every file in the app, relative to its root — what a fix or edit turn shows
+ * the model so it knows what exists before reading anything. Dependency and
+ * VCS internals are noise at best and enormous at worst.
+ */
+async function listAppFiles(dir) {
+  const entries = await fs.readdir(dir, { recursive: true, withFileTypes: true })
+  return entries
+    .filter((e) => e.isFile())
+    .map((e) => path.relative(dir, path.join(e.parentPath ?? e.path, e.name)))
+    .filter((f) => !f.startsWith('node_modules/') && !f.startsWith('.git/'))
+}
+
+/** The assistant's reply text, for a chat bubble. Never empty. */
+function finalText(message) {
+  const text = (message?.content ?? [])
+    .filter((block) => block.type === 'text')
+    .map((block) => block.text)
+    .join('\n')
+    .trim()
+  return text || '(made changes)'
+}
+
 async function existingIds(appsDir) {
   try {
     const entries = await fs.readdir(appsDir, { withFileTypes: true })
@@ -228,11 +266,7 @@ export function createFixer({ runAgent }) {
 
     let listing = []
     try {
-      const entries = await fs.readdir(dir, { recursive: true, withFileTypes: true })
-      listing = entries
-        .filter((e) => e.isFile())
-        .map((e) => path.relative(dir, path.join(e.parentPath ?? e.path, e.name)))
-        .filter((f) => !f.startsWith('node_modules/') && !f.startsWith('.git/'))
+      listing = await listAppFiles(dir)
     } catch (err) {
       return { ok: false, id, error: `Cannot read the app folder: ${err.message}` }
     }
@@ -276,12 +310,83 @@ export function createFixer({ runAgent }) {
   return { fix }
 }
 
+const EDIT_SYSTEM_PROMPT = `You refine an existing app for Local Reef, a desktop shell that runs local apps in windows. You are in an ongoing conversation with the app's owner: earlier turns are in the conversation, and the files on disk are the current truth — trust the files over your memory of them.
+
+How to work:
+- Do what this message asks, and only that. Minimal diffs: do not redesign, rename, or "improve" code the request does not touch.
+- Read a file before you rewrite it. write_file replaces the whole file, so you must preserve everything you are not deliberately changing.
+- Never delete or empty a file, and never remove a feature the owner did not ask you to remove.
+- Keep reef.json's name and icon unless asked to change them.
+- If the message is a question rather than a change request, answer it from the files without writing anything.
+
+The same constraints as any Local Reef app still apply: no network requests, no CDNs, works fully offline, system fonts, state in localStorage.
+
+When you are done, reply in one or two sentences — your reply is shown in a chat pane next to the running app.`
+
+/**
+ * Conversational refinement of an app the user built with ⌘K.
+ *
+ * Deliberately separate from createFixer even though the shape rhymes: a fix
+ * turn is driven by a crash and must change something; an edit turn is driven
+ * by a person and may legitimately change nothing (a question is a valid
+ * turn). What they share is the guarantee — this operates on a folder that
+ * already exists, and **nothing here ever removes anything**.
+ *
+ * The caller owns the conversation: it passes `history` in and appends the
+ * returned `reply` to it after a successful turn. A failed turn is the
+ * caller's cue to leave history untouched so the user can rephrase.
+ */
+export function createEditor({ runAgent }) {
+  async function edit({ id, dir, name, message, history = [], onProgress = () => {} }) {
+    onProgress({ phase: 'reading', id })
+
+    let listing = []
+    try {
+      listing = await listAppFiles(dir)
+    } catch (err) {
+      return { ok: false, id, error: `Cannot read the app folder: ${err.message}` }
+    }
+
+    const { tools, written } = createAppTools(dir, {
+      onFile: (file) => onProgress({ phase: 'writing', id, file }),
+    })
+
+    const prompt = [
+      message,
+      '',
+      `The app is "${name ?? id}". Files on disk:`,
+      listing.length ? listing.join('\n') : '(none)',
+    ].join('\n')
+
+    let final
+    try {
+      final = await runAgent({ prompt, tools, dir, id, onProgress, system: EDIT_SYSTEM_PROMPT, history })
+    } catch (err) {
+      return { ok: false, id, error: err?.message ?? String(err) }
+    }
+
+    if (final?.stop_reason === 'refusal') {
+      const category = final.stop_details?.category
+      return {
+        ok: false,
+        id,
+        error: `The model declined this request${category ? ` (${category})` : ''}.`,
+      }
+    }
+
+    onProgress({ phase: 'done', id })
+    return { ok: true, id, dir, files: [...written], reply: finalText(final) }
+  }
+
+  return { edit }
+}
+
 /**
  * The real model-backed runner. Kept separate from createGenerator so the
  * generation flow is testable without touching the network.
  */
 export function createClaudeRunner({ apiKey, model = MODELS.generate } = {}) {
-  return async function runAgent({ prompt, tools, onProgress = () => {}, system }) {
+  return async function runAgent({ prompt, tools, onProgress = () => {}, system, history }) {
     const [{ default: Anthropic }, { betaTool }] = await Promise.all([
       import('@anthropic-ai/sdk'),
       import('@anthropic-ai/sdk/helpers/beta/json-schema'),
@@ -302,7 +407,7 @@ export function createClaudeRunner({ apiKey, model = MODELS.generate } = {}) {
       max_tokens: 32000,
       ...outputConfig(model),
       system: system ?? SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: prompt }],
+      messages: buildMessages(history, prompt),
       tools: tools.map((tool) =>
         betaTool({
           name: tool.name,
