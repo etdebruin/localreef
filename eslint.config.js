@@ -5,6 +5,9 @@ export default [
   {
     ignores: [
       'node_modules/**',
+      // Build output: dist/ holds a whole copy of the app inside the bundle.
+      'dist/**',
+      'build/**',
       'apps/**/dist/**',
       'apps/**/node_modules/**',
       // Generated on demand by `npm run test:vite`; browser code, not ours.

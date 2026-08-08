@@ -30,6 +30,12 @@ const projectRoot = path.resolve(here, '../..')
 // system resolver to do the RFC 6761 thing.
 app.commandLine.appendSwitch('host-resolver-rules', 'MAP *.reef.localhost 127.0.0.1')
 
+// Pin userData explicitly. Run from source it derives from package.json's
+// `name`, run from a bundle it derives from `productName` — so a packaged
+// build would keep its settings, links and generated apps in a *different*
+// folder from the dev build. Same folder either way.
+app.setPath('userData', path.join(app.getPath('appData'), 'localreef'))
+
 const TOKEN = crypto.randomBytes(24).toString('hex')
 
 const NO_KEY = 'No Anthropic API key. Add one in Settings, or set ANTHROPIC_API_KEY and relaunch.'

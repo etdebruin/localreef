@@ -29,7 +29,7 @@ export const BACKGROUNDS = [
     kind: 'image',
     file: 'tranquil-reef.webp',
     // Sun rays land dead centre behind the title, so the top strip works hard.
-    scrim: scrim(0.66, 0.55, 0.36),
+    scrim: scrim(0.66, 0.3, 0.36),
   },
   {
     id: 'exotic-reef',
@@ -38,7 +38,7 @@ export const BACKGROUNDS = [
     file: 'exotic-reef.webp',
     // Brighter and more saturated overall, with light reaching the corners —
     // less needed up top, more vignette to stop the edges shouting.
-    scrim: scrim(0.58, 0.5, 0.46),
+    scrim: scrim(0.58, 0.28, 0.46),
   },
   {
     id: 'deep',
@@ -58,7 +58,7 @@ export const BACKGROUNDS = [
           radial-gradient(80% 60% at 88% 104%, oklch(0.46 0.08 190) 0%, transparent 55%),
           linear-gradient(to bottom, oklch(0.4 0.07 210), oklch(0.24 0.05 225))`,
     // Lighter, so the dock and the title need real separation.
-    scrim: scrim(0.4, 0.36, 0.28),
+    scrim: scrim(0.4, 0.22, 0.28),
   },
   {
     id: 'dusk',

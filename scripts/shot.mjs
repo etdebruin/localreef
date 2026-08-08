@@ -142,11 +142,18 @@ async function main() {
 
   await fs.mkdir(outDir, { recursive: true })
 
-  const electron = spawn(
-    path.join(projectRoot, 'node_modules/.bin/electron'),
-    ['.', `--remote-debugging-port=${PORT}`],
-    { cwd: projectRoot, stdio: ['ignore', 'pipe', 'pipe'] },
-  )
+  // REEF_APP_BIN points this at a packaged build instead of the source tree,
+  // which is the only way to verify the thing people actually launch: a GUI
+  // launch inherits no shell PATH, so spawning a server app is a genuinely
+  // different code path from `npm start`.
+  const packaged = process.env.REEF_APP_BIN
+  const electron = packaged
+    ? spawn(packaged, [`--remote-debugging-port=${PORT}`], { stdio: ['ignore', 'pipe', 'pipe'] })
+    : spawn(
+        path.join(projectRoot, 'node_modules/.bin/electron'),
+        ['.', `--remote-debugging-port=${PORT}`],
+        { cwd: projectRoot, stdio: ['ignore', 'pipe', 'pipe'] },
+      )
 
   const logs = []
   electron.stdout.on('data', (d) => logs.push(String(d)))

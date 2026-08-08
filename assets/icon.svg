@@ -1,0 +1,142 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!--
+    Local Reef's app icon.
+
+    Drawn rather than photographed so it stays sharp at 16px, where a
+    downsampled painting turns to mush.
+
+    The species matters. A generic side-on oval reads as "fish" and nothing
+    more; a butterflyfish's tall disc body, swept fins and vertical banding
+    give a silhouette that is recognisable at dock size and still interesting
+    at 512. Detail is layered so it drops out gracefully: at 16px you get the
+    disc, the tail and the eye, which is enough.
+
+    Follows the Big Sur icon grid — an 824px squircle centred in 1024 — so it
+    carries the same visual weight as system icons in the Dock.
+  -->
+  <defs>
+    <linearGradient id="tile" x1="0.1" y1="0" x2="0.6" y2="1">
+      <stop offset="0" stop-color="#2f97a3"/>
+      <stop offset="0.42" stop-color="#125a75"/>
+      <stop offset="1" stop-color="#08203f"/>
+    </linearGradient>
+
+    <radialGradient id="sun" cx="0.44" cy="-0.12" r="0.9">
+      <stop offset="0" stop-color="#bdf6ee" stop-opacity="0.62"/>
+      <stop offset="0.4" stop-color="#5fd0d4" stop-opacity="0.2"/>
+      <stop offset="1" stop-color="#5fd0d4" stop-opacity="0"/>
+    </radialGradient>
+
+    <linearGradient id="body" x1="0.1" y1="0.05" x2="0.8" y2="1">
+      <stop offset="0" stop-color="#ffd88a"/>
+      <stop offset="0.38" stop-color="#ffa04f"/>
+      <stop offset="0.75" stop-color="#f4653f"/>
+      <stop offset="1" stop-color="#d93a58"/>
+    </linearGradient>
+
+    <linearGradient id="fin" x1="0" y1="0" x2="0.5" y2="1">
+      <stop offset="0" stop-color="#ffe3ab" stop-opacity="0.96"/>
+      <stop offset="1" stop-color="#ff8352" stop-opacity="0.82"/>
+    </linearGradient>
+
+    <!-- Light shafts get a real blur. Hard-edged bands read as stripes on the
+         tile rather than as light coming through water. -->
+    <radialGradient id="belly" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#fff3cf" stop-opacity="0.28"/>
+      <stop offset="0.6" stop-color="#fff3cf" stop-opacity="0.12"/>
+      <stop offset="1" stop-color="#fff3cf" stop-opacity="0"/>
+    </radialGradient>
+
+    <filter id="soften" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="26"/>
+    </filter>
+
+    <filter id="drop" x="-25%" y="-25%" width="150%" height="150%">
+      <feDropShadow dx="0" dy="16" stdDeviation="22" flood-color="#03101c" flood-opacity="0.45"/>
+    </filter>
+
+    <clipPath id="tileClip">
+      <rect x="100" y="100" width="824" height="824" rx="188" ry="188"/>
+    </clipPath>
+
+    <!-- Body outline, reused to clip the banding so it never spills. -->
+    <path id="bodyPath"
+          d="M 232 536
+             C 284 424 352 350 472 330
+             C 598 310 690 400 710 518
+             C 690 636 598 722 472 704
+             C 352 686 284 648 232 536 Z"/>
+    <clipPath id="bodyClip"><use href="#bodyPath"/></clipPath>
+  </defs>
+
+  <g filter="url(#drop)">
+    <rect x="100" y="100" width="824" height="824" rx="188" ry="188" fill="url(#tile)"/>
+  </g>
+
+  <g clip-path="url(#tileClip)">
+    <rect x="100" y="100" width="824" height="824" fill="url(#sun)"/>
+
+    <g opacity="0.2" fill="#e8fdff" filter="url(#soften)">
+      <path d="M296 60 L392 60 L236 964 L164 964 Z"/>
+      <path d="M486 60 L540 60 L430 964 L386 964 Z"/>
+      <path d="M676 60 L768 60 L690 964 L610 964 Z"/>
+    </g>
+
+    <g filter="url(#drop)">
+      <!-- Tail first: the body's edge should sit over its root. -->
+      <path fill="url(#fin)"
+            d="M700 518
+               C 742 500 802 458 866 402
+               C 856 468 842 502 820 518
+               C 842 534 856 570 866 636
+               C 802 580 742 538 700 518 Z"/>
+
+      <!-- Dorsal sail -->
+      <path fill="url(#fin)"
+            d="M392 358
+               C 448 262 612 236 712 312
+               C 644 328 520 338 392 358 Z"/>
+
+      <!-- Anal fin -->
+      <path fill="url(#fin)"
+            d="M416 688
+               C 468 768 612 782 706 720
+               C 634 710 520 702 416 688 Z"/>
+
+      <use href="#bodyPath" fill="url(#body)"/>
+
+      <!-- Vertical banding. The butterflyfish cue, and the thing that stops
+           the body reading as a plain oval at larger sizes. -->
+      <g clip-path="url(#bodyClip)" opacity="0.34">
+        <path fill="#c2354f" d="M336 300 C 372 420 372 620 336 740 L268 740 C 306 620 306 420 268 300 Z"/>
+        <path fill="#c2354f" d="M486 296 C 522 420 522 620 486 744 L430 744 C 466 620 466 420 430 296 Z"/>
+        <path fill="#c2354f" d="M636 310 C 668 424 668 616 636 730 L588 730 C 620 616 620 424 588 310 Z"/>
+      </g>
+
+      <!-- Belly light. A radial gradient, not a solid ellipse — a flat fill
+           left a visible oval seam across the lower body. -->
+      <ellipse cx="452" cy="600" rx="180" ry="96" fill="url(#belly)"
+               clip-path="url(#bodyClip)"/>
+
+      <!-- Pectoral fin, over the body -->
+      <path fill="#ffc98d" fill-opacity="0.75"
+            d="M456 540
+               C 506 580 532 644 500 678
+               C 452 650 432 588 456 540 Z"/>
+    </g>
+
+    <!-- The eye is the highest-contrast element on purpose: it is what makes
+         the shape read as a creature rather than a leaf, and it is the last
+         thing still legible at 16px. -->
+    <circle cx="322" cy="486" r="34" fill="#ffffff" fill-opacity="0.9"/>
+    <circle cx="324" cy="488" r="24" fill="#16232f"/>
+    <circle cx="314" cy="478" r="9" fill="#ffffff"/>
+
+    <!-- Two bubbles. Cheap charm, invisible below 128px, and they never touch
+         the silhouette. -->
+    <g fill="#dffbff" fill-opacity="0.34">
+      <circle cx="806" cy="252" r="18"/>
+      <circle cx="852" cy="196" r="10"/>
+    </g>
+  </g>
+</svg>
