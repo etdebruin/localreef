@@ -151,7 +151,7 @@
         border-radius: 50%;
         display: grid; place-items: center;
         overflow: hidden;
-        box-shadow: 0 3px 11px rgba(0, 0, 0, 0.38);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
       }
 
       /* The glass itself, over whatever the tile contains: tight specular high
@@ -176,48 +176,58 @@
         display: block;
       }
 
-      /* Emoji sit on a *light* tile.
-         The first attempt kept this neutral-dark on the theory that emoji carry
-         their own colour — but most emoji are small, dark-lined artwork, so on
-         a dark tile in a dark dock they vanished and the result still read as a
-         sticker on a box. Luminance behind them is what makes them legible.
-         The hue tint is faint: enough to distinguish two apps at a glance,
-         not enough to fight the emoji's own colours. */
+      /* Emoji live *inside* the bubble.
+         This was a flat, opaque cream disc, and the result was a ping-pong
+         ball with a sticker on it: the glass highlight was white-on-white and
+         invisible, and a 27px emoji sat marooned in a 52px circle of dead
+         space.
+
+         A real bubble is bright in the middle where light bounces back
+         through it and clear toward the edge. That is what is drawn now, so
+         the emoji gets exactly the luminance it needs behind it while the rim
+         stays glassy and the reef shows through. The hue tint is faint and
+         still per-app. */
       .tile--emoji {
-        background: linear-gradient(
-          160deg,
-          oklch(0.96 0.022 var(--hue)),
-          oklch(0.89 0.04 calc(var(--hue) + 10))
-        );
-        box-shadow:
-          0 2px 6px rgba(0, 0, 0, 0.45),
-          inset 0 0 0 1px rgba(0, 0, 0, 0.06);
+        /* Almost no fill. Two earlier attempts put the emoji *on* something —
+           first an opaque disc, then a milky one — and both read as a sticker
+           stuck to a ball, because the fill competed with the artwork instead
+           of framing it. A bubble is mostly nothing: what you see is the rim,
+           the highlight, and whatever is behind it. So the emoji is the icon
+           and the sphere is a thin shell around it. */
+        background:
+          radial-gradient(circle at 50% 48%,
+            oklch(0.97 0.03 var(--hue) / 0.2) 0%,
+            oklch(0.94 0.05 var(--hue) / 0.1) 58%,
+            transparent 82%);
+        backdrop-filter: blur(3px) saturate(1.15) brightness(1.06);
       }
       .tile-glyph {
-        font-size: 27px;
+        /* Nearly fills the sphere. At 27px in a 52px circle there was more
+           dead space than icon. */
+        font-size: 38px;
         line-height: 1;
-        /* Emoji render with their own baseline metrics; nudge to true centre. */
         transform: translateY(1px);
+        filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.45));
       }
 
       /* Generated: hue varies per app, lightness and chroma do not. Identical
          perceived weight across the set is what makes it look designed rather
          than randomly coloured. */
       .tile--generated {
-        background: linear-gradient(
-          160deg,
-          oklch(0.66 0.16 var(--hue)),
-          oklch(0.52 0.15 calc(var(--hue) + 12))
-        );
-        box-shadow:
-          0 2px 6px rgba(0, 0, 0, 0.45),
-          inset 0 1px 0 rgba(255, 255, 255, 0.18);
+        background:
+          radial-gradient(circle at 50% 46%,
+            oklch(0.72 0.16 var(--hue) / 0.95) 0%,
+            oklch(0.62 0.16 var(--hue) / 0.88) 48%,
+            oklch(0.5 0.15 calc(var(--hue) + 12) / 0.72) 78%,
+            oklch(0.46 0.13 calc(var(--hue) + 12) / 0.42) 100%);
+        backdrop-filter: blur(6px) saturate(1.1);
       }
       .tile-initials {
         font-size: 20px;
         font-weight: 560;
         letter-spacing: 0.01em;
-        color: oklch(0.97 0.025 var(--hue));
+        color: oklch(0.99 0.02 var(--hue));
+        text-shadow: 0 1px 3px oklch(0.35 0.1 var(--hue) / 0.55);
       }
 
       .dock-app.broken .tile {

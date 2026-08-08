@@ -55,12 +55,26 @@ export function initialsFor(name) {
 }
 
 /**
- * A stable hue per app id.
+ * Hue bands sampled off the wallpapers.
  *
- * FNV-1a: cheap, and it avalanches well enough that `app1` and `app2` land far
- * apart rather than adjacent. Only the hue is derived — lightness and chroma
- * are fixed in CSS, so every generated tile carries identical visual weight and
- * the set reads as one family instead of a bag of random colours.
+ * Spreading the hash across the whole colour wheel put app icons on mustard
+ * and olive, which read as accidental sitting next to a coral reef. These are
+ * the colours the reef is actually made of, so a generated icon looks chosen.
+ */
+const REEF_BANDS = [
+  [12, 46], // coral to orange
+  [330, 360], // pink to magenta
+  [172, 208], // teal to cyan
+  [232, 262], // deep water blue
+]
+
+/**
+ * A stable hue per app id, inside the reef palette.
+ *
+ * FNV-1a: cheap, and it avalanches well enough that `app1` and `app2` land in
+ * different bands rather than adjacent. Only the hue is derived — lightness
+ * and chroma are fixed in CSS, so every generated bubble carries identical
+ * visual weight and the set reads as one family.
  */
 export function hueFor(id) {
   const text = String(id ?? '')
@@ -72,9 +86,14 @@ export function hueFor(id) {
     hash = Math.imul(hash, 0x01000193) >>> 0
   }
 
-  // Golden-angle stride spreads sequential hashes around the wheel instead of
-  // letting them bunch, which matters because real ids are often near-siblings.
-  return Math.round(((hash % 360) * 137.508) % 360)
+  const [low, high] = REEF_BANDS[hash % REEF_BANDS.length]
+
+  // Different bits pick the position within the band, so two ids landing in
+  // the same band still separate. The golden ratio spreads them evenly rather
+  // than clustering.
+  const offset = (((hash >>> 8) * 0.6180339887) % 1) * (high - low)
+
+  return Math.round(low + offset) % 360
 }
 
 /**

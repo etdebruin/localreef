@@ -168,8 +168,8 @@ what sits inside varies:
 | Declared | Renders as |
 |---|---|
 | a file in the app folder (`icon.png`, `logo.svg`) | the art, edge to edge |
-| an emoji | the emoji on a light, faintly hue-tinted ground |
-| nothing | a ground tinted from the app id, carrying the name's initials |
+| nothing | a bubble tinted from the app id, carrying the name's initials |
+| an emoji | the emoji inside a thin glass shell |
 
 These were squares first, and the shape was the wrong call — beside the bubble
 controls in the dock, squares read as a different and older idea. The principle
@@ -181,10 +181,18 @@ bare letters and art all at different visual weights, each supplying its own sha
 Fixing the frame and letting only the contents change makes a mixed set read as one
 family.
 
-Generated tiles vary **hue only**; lightness and chroma are constants in CSS
-(`oklch(0.62 0.15 <hue>)`). Equal perceived weight across the set is what separates
-"designed" from "randomly coloured". The hue comes from an FNV-1a hash of the id
-with a golden-angle stride, so sibling ids like `app1`/`app2` land far apart.
+Generated bubbles vary **hue only**; lightness and chroma are constants in CSS.
+Equal perceived weight across the set is what separates "designed" from "randomly
+coloured". The hue comes from an FNV-1a hash of the id, and it is confined to
+bands sampled off the wallpapers — coral, pink, teal, deep blue. Spreading it
+across the whole wheel produced mustard and olive icons, which read as accidental
+next to a coral reef.
+
+**Generated is the default, not the fallback.** Emoji were what the samples
+declared, and they were the ugly part: macOS emoji are detailed and mostly
+rectangular, so inside a sphere they read as a sticker suspended in a ball. Four
+rounds of work on the glass could not fix contents that were fighting the
+container. The samples now declare no icon at all.
 
 Icon files ride to the renderer as data URIs, so they are capped at 512 KB and
 resolved through the gateway's path confinement — the path comes out of a manifest

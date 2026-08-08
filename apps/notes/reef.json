@@ -1,5 +1,7 @@
 {
   "name": "Notes",
-  "icon": "📝",
-  "window": { "width": 560, "height": 620 }
+  "window": {
+    "width": 560,
+    "height": 620
+  }
 }

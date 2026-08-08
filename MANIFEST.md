@@ -63,10 +63,16 @@ Every field is optional.
 An icon is always a circular bubble. What you declare decides what fills it:
 
 ```json
-{ "icon": "icon.png" }   // the art, edge to edge
-{ "icon": "📝" }          // the emoji, on a neutral tile
-{}                        // a tile tinted from the app id, with initials
+{}                        // a bubble tinted from the app id, with initials
+{ "icon": "icon.png" }    // your art, edge to edge
+{ "icon": "📝" }           // the emoji, inside a thin glass shell
 ```
+
+**Declaring nothing is the good default.** The generated bubble draws its hue
+from the app id, inside a palette sampled off the wallpapers, so a dock of them
+looks like one set. An emoji works, but macOS renders emoji as detailed,
+mostly rectangular artwork, and inside a sphere that tends to read as a sticker
+rather than an icon — the bundled samples deliberately declare no icon.
 
 Image paths are relative to the app folder, may be `.png` `.svg` `.jpg` `.webp`
 `.gif` `.avif` `.ico`, and are capped at **512 KB**. A path that points outside the

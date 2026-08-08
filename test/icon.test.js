@@ -85,14 +85,25 @@ test('hueFor', async (t) => {
     assert.equal(new Set(hues).size, 4)
   })
 
-  await t.test('spreads a realistic set across the wheel', () => {
-    const ids = ['notes', 'clock', 'chart', 'feed', 'underscore', 'timer', 'budget', 'inbox']
-    const hues = ids.map(hueFor)
+  await t.test('stays inside the reef palette', () => {
+    // Hues are drawn from bands sampled off the wallpapers — coral, pink,
+    // teal, deep blue. The full colour wheel put app icons on mustard and
+    // olive, which read as accidental next to a coral reef.
+    const inBand = (h) =>
+      (h >= 12 && h <= 46) || (h >= 330 && h <= 360) || (h >= 172 && h <= 208) || (h >= 232 && h <= 262)
 
-    // Every quadrant of the wheel should be reachable; a hash that clusters
-    // would make a dock of apps read as one colour.
-    const quadrants = new Set(hues.map((h) => Math.floor(h / 90)))
-    assert.ok(quadrants.size >= 3, `hues=${hues} quadrants=${[...quadrants]}`)
+    const ids = ['notes', 'clock', 'chart', 'feed', 'underscore', 'timer', 'budget', 'inbox']
+    for (const id of ids) {
+      const hue = hueFor(id)
+      assert.ok(inBand(hue), `${id} -> ${hue} is outside the reef bands`)
+    }
+  })
+
+  await t.test('uses more than one band across a realistic set', () => {
+    // Constraining the palette must not collapse it to a single colour.
+    const ids = ['notes', 'clock', 'chart', 'feed', 'underscore', 'timer', 'budget', 'inbox']
+    const bands = new Set(ids.map((id) => Math.floor(hueFor(id) / 40)))
+    assert.ok(bands.size >= 3, `only ${bands.size} distinct bands: ${ids.map(hueFor)}`)
   })
 })
 
