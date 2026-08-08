@@ -6,12 +6,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 npm start                  # launch the desktop (Electron)
-npm test                   # 180 unit + integration tests
+npm test                   # 225 unit + integration tests
 npm run lint
 npm run test:electron      # iframe auth, needs a real Electron GUI
-npm run test:electron:ui   # window drag/close via real Chromium input events
+npm run test:electron:ui   # dock/window/settings via real Chromium input events
+npm run test:electron:ws   # browser-initiated WebSocket from an app iframe
 npm run test:vite          # real Vite through the gateway, incl. live HMR
+npm run shot               # screenshot the running app into .shots/
 ```
+
+**You can see the app — use it.** `npm run shot` drives the real desktop over
+the Chrome DevTools Protocol and has it photograph its own page, so it needs no
+macOS screen-recording grant and no test-only code in `src/main`.
+`npm run shot -- dock settings` captures named states only; the list is in
+`scripts/shot.mjs`. Look at the output before claiming a UI change works. The
+first run found emoji icons that were invisible against their own tiles, and a
+clock stuck on "disconnected — retrying" that turned out to be **every** app's
+WebSocket silently failing.
 
 Run one test file: `node --test test/gateway.test.js`
 Run one test by name: `node --test --test-name-pattern 'websocket' test/gateway.test.js`
@@ -64,6 +75,15 @@ resolver to honour RFC 6761.
 `AUTH_HEADER` (`x-desktop-token`) is injected by Electron via
 `webRequest.onBeforeSendHeaders`, scoped to `*.desktop.localhost`, and stripped
 before forwarding so app servers never see it.
+
+**The filter must list `ws://` and `wss://` explicitly.** A `*` scheme in a
+Chrome match pattern means http or https and *nothing else*, so
+`*://*.desktop.localhost/*` never matched a WebSocket handshake. Every app's
+upgrade reached the gateway with no credential and was destroyed — the clock
+sample sat on "disconnected — retrying" and Vite HMR was dead in the real app
+while `test:vite` stayed green, because that harness sets the header itself.
+`test/electron/iframe-websocket.mjs` guards it; run it with
+`HTTP_ONLY_FILTER=1` to watch the old filter fail.
 
 **Do not "simplify" this back to the cookie.** An app iframe is a cross-site
 context relative to the `file://` renderer, so a `SameSite=Lax` cookie is set
@@ -121,6 +141,15 @@ plain suite structurally cannot**, and two shipped bugs prove it:
 - `test:vite` runs a real Vite dev server. A hand-rolled WebSocket sample stood
   in for it for a long time and hid two bugs: IPv6-only binding, and `host` not
   being threaded to the proxy.
+- `test:electron:ws` opens a WebSocket from a real page. Every other suite
+  drives the gateway from Node and sets the auth header on the handshake by
+  hand, so all of them proved the gateway *relays* an authorised upgrade and
+  none proved a browser ever sends one. It did not.
+
+The pattern behind all four: **assert the effect a user sees, not the mechanism
+you just wrote.** Minimize shipped broken because its test asserted
+`el.hidden === true` — the state the code sets — while `display: flex` kept the
+window fully on screen. Measure the bounding box, the HTTP status, the pixels.
 
 Do not delete either suite as duplication.
 

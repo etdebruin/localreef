@@ -14,3 +14,4 @@ apps/*/.venv/
 
 # Vite fixture is generated on demand by npm run test:vite
 test/vite/fixture/
+.shots/

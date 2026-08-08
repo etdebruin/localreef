@@ -47,6 +47,7 @@ function tileFor(app, className = 'tile') {
   }
 
   if (tile.kind === 'emoji') {
+    el.style.setProperty('--hue', String(tile.hue ?? 0))
     el.append(h('span', { className: 'tile-glyph', textContent: tile.glyph }))
     return el
   }

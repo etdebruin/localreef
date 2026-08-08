@@ -40,9 +40,14 @@ Things asserted in the design that have not actually been demonstrated. These
 matter more than the feature gaps below, because they could invalidate a
 decision rather than just leave one unmade.
 
-- **Nobody has looked at the desktop.** All UI verification has been through
-  Electron harnesses and log inspection; `screencapture` needs a permission the
-  agent shell lacks. Layout, spacing, and visual polish are unreviewed.
+*(The long-standing "nobody has looked at the desktop" entry is closed —
+`npm run shot` photographs the running app. It paid for itself immediately:
+the first screenshot showed emoji icons invisible on dark tiles, and the
+second showed the clock stuck on "disconnected — retrying", which turned out
+to be every app's WebSocket failing.)*
+
+- **No screenshot runs in CI.** `npm run shot` is manual, so a visual
+  regression is still only caught by someone remembering to look.
 
 ---
 

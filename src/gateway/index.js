@@ -179,8 +179,10 @@ export function createGateway({ token, lookup }) {
   // counts them, leaving server.close() waiting forever. Track them ourselves.
   const upgraded = new Set()
 
-  // WebSocket / HMR. Cookie-only auth here: an upgrade is never the first
-  // request an app makes, so the cookie is already established.
+  // WebSocket / HMR. Header or cookie — and in practice it is always the
+  // header, because an app frame is cross-site and never sends the cookie
+  // back. Electron has to list ws:// and wss:// in its webRequest filter for
+  // that header to arrive at all; see the note in src/main/index.js.
   server.on('upgrade', (req, socket, head) => {
     upgraded.add(socket)
     socket.on('close', () => upgraded.delete(socket))

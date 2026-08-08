@@ -103,11 +103,9 @@
         border-radius: 12px;
         display: grid; place-items: center;
         overflow: hidden;
-        /* Contact shadow plus a hairline top highlight: enough to seat the
-           tile on the dock without turning it into a button. */
-        box-shadow:
-          0 2px 5px rgba(0, 0, 0, 0.4),
-          inset 0 1px 0 rgba(255, 255, 255, 0.14);
+        /* Contact shadow only. The tile sits on a dark translucent dock, so it
+           needs to look lifted, not outlined — a border reads as a button. */
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
       }
 
       .tile--image img {
@@ -116,13 +114,25 @@
         display: block;
       }
 
-      /* Emoji carry their own colour, so the tile behind them stays neutral —
-         a tinted background would fight whatever hue the emoji already is. */
+      /* Emoji sit on a *light* tile.
+         The first attempt kept this neutral-dark on the theory that emoji carry
+         their own colour — but most emoji are small, dark-lined artwork, so on
+         a dark tile in a dark dock they vanished and the result still read as a
+         sticker on a box. Luminance behind them is what makes them legible.
+         The hue tint is faint: enough to distinguish two apps at a glance,
+         not enough to fight the emoji's own colours. */
       .tile--emoji {
-        background: linear-gradient(160deg, var(--surface-2), #191d27);
+        background: linear-gradient(
+          160deg,
+          oklch(0.96 0.022 var(--hue)),
+          oklch(0.89 0.04 calc(var(--hue) + 10))
+        );
+        box-shadow:
+          0 2px 6px rgba(0, 0, 0, 0.45),
+          inset 0 0 0 1px rgba(0, 0, 0, 0.06);
       }
       .tile-glyph {
-        font-size: 27px;
+        font-size: 26px;
         line-height: 1;
         /* Emoji render with their own baseline metrics; nudge to true centre. */
         transform: translateY(1px);
@@ -134,9 +144,12 @@
       .tile--generated {
         background: linear-gradient(
           160deg,
-          oklch(0.62 0.15 var(--hue)),
-          oklch(0.48 0.14 calc(var(--hue) + 12))
+          oklch(0.66 0.16 var(--hue)),
+          oklch(0.52 0.15 calc(var(--hue) + 12))
         );
+        box-shadow:
+          0 2px 6px rgba(0, 0, 0, 0.45),
+          inset 0 1px 0 rgba(255, 255, 255, 0.18);
       }
       .tile-initials {
         font-size: 19px;
@@ -162,7 +175,9 @@
       .tile-sm img { width: 100%; height: 100%; object-fit: cover; display: block; }
       .tile-sm .tile-glyph { font-size: 12px; transform: none; }
       .tile-sm .tile-initials { font-size: 8.5px; font-weight: 600; }
-      .tile-sm.tile-sm--emoji { background: none; }
+      .tile-sm.tile-sm--emoji {
+        background: linear-gradient(160deg, oklch(0.96 0.022 var(--hue)), oklch(0.89 0.04 calc(var(--hue) + 10)));
+      }
       .tile-sm.tile-sm--generated {
         background: linear-gradient(160deg, oklch(0.62 0.15 var(--hue)), oklch(0.48 0.14 calc(var(--hue) + 12)));
       }
@@ -324,20 +339,24 @@
         z-index: 9998;
       }
 
-      /* Shell actions — smaller and quieter than the apps beside them. */
+      /* Shell actions. Deliberately not tiles — these are controls, not apps —
+         but no outline either: an empty bordered box next to three solid tiles
+         reads as a missing icon. Glyph alone, with the surface appearing only
+         on hover. */
       .dock-btn {
         -webkit-app-region: no-drag;
-        width: 34px; height: 34px;
-        margin-bottom: 12px;
-        border: 1px solid var(--line);
+        width: 38px; height: 38px;
+        margin-bottom: 5px;
+        border: 0;
         background: transparent;
         color: var(--muted);
         border-radius: 10px;
-        cursor: pointer; font: inherit; font-size: 15px;
+        cursor: pointer; font: inherit; font-size: 16px;
         display: grid; place-items: center;
         transition: background 120ms ease, color 120ms ease;
       }
-      .dock-btn:hover { background: rgba(255,255,255,0.08); color: var(--text); }
+      .dock-btn:hover { background: rgba(255,255,255,0.09); color: var(--text); }
+      .dock-btn:active { background: rgba(255,255,255,0.05); }
 
       #empty {
         position: absolute; inset: 0;

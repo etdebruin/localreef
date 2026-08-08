@@ -103,6 +103,15 @@ never see it. The cookie and query-param paths remain as fallbacks.
 This was caught only by an Electron harness (`test/electron/iframe-auth.mjs`); the
 unit tests set `Cookie` directly and so bypassed browser policy entirely.
 
+**And the header filter has to name `ws://` and `wss://`.** A `*` scheme in a Chrome
+match pattern covers http and https only, so the original
+`*://*.desktop.localhost/*` never matched a WebSocket handshake: the upgrade arrived
+at the gateway with no credential and was destroyed. Since WebSocket support is the
+entire reason this is an HTTP gateway rather than a custom protocol, that quietly
+removed the point of the design — HMR was dead in the real app while `test:vite`
+stayed green, because that harness attaches the header itself. Same lesson as the
+cookie, one layer down: a Node client is not a browser.
+
 Origin persists across sessions, so app `localStorage` survives. Token rotates per
 Local Desktop launch.
 

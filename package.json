@@ -11,7 +11,9 @@
     "lint": "eslint .",
     "test:electron": "electron test/electron/iframe-auth.mjs",
     "test:electron:ui": "electron test/electron/window-controls.mjs",
-    "test:vite": "node test/vite/hmr.mjs"
+    "test:vite": "node test/vite/hmr.mjs",
+    "shot": "node scripts/shot.mjs",
+    "test:electron:ws": "electron test/electron/iframe-websocket.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.18.0",

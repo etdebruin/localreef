@@ -98,7 +98,7 @@ function tileFor(record) {
   }
 
   if (record.icon && !isImageIcon(record.icon)) {
-    return { kind: 'emoji', image: null, glyph: record.icon, initials: null, hue: null }
+    return { kind: 'emoji', image: null, glyph: record.icon, initials: null, hue: hueFor(record.id) }
   }
 
   return {
@@ -185,8 +185,20 @@ app.whenReady().then(async () => {
   // cookie gets stored and then never sent back — the app would load once and
   // 401 on the redirect. Scoped strictly to app origins so the token cannot
   // leak anywhere else.
+  // ws:// and wss:// are listed explicitly. A `*` scheme in a Chrome match
+  // pattern means http or https and nothing else, so the http-only filter
+  // never matched a WebSocket handshake — every app's upgrade reached the
+  // gateway with no credential and was destroyed. The clock sample sat on
+  // "disconnected — retrying" and Vite HMR would have failed the same way.
+  // Guarded by test/electron/iframe-websocket.mjs.
   session.defaultSession.webRequest.onBeforeSendHeaders(
-    { urls: ['*://*.desktop.localhost/*'] },
+    {
+      urls: [
+        '*://*.desktop.localhost/*',
+        'ws://*.desktop.localhost/*',
+        'wss://*.desktop.localhost/*',
+      ],
+    },
     (details, callback) => {
       callback({ requestHeaders: { ...details.requestHeaders, [AUTH_HEADER]: TOKEN } })
     },

@@ -128,6 +128,35 @@ app.whenReady().then(async () => {
   const runningDot = await js(`document.querySelector('.dock-app')?.classList.contains('running') ?? null`)
   check('the dock marks the app as running', runningDot === true)
 
+  // The titlebar carries the same tile as the dock, so an app looks like
+  // itself in both places. It is small, so verify it actually renders its
+  // contents rather than showing a bare coloured square.
+  const titleTile = await js(`(() => {
+    const el = document.querySelector('.window .titlebar .tile-sm')
+    if (!el) return null
+    const r = el.getBoundingClientRect()
+    const inner = el.querySelector('.tile-glyph, .tile-initials, img')
+    const ir = inner?.getBoundingClientRect()
+    return {
+      w: Math.round(r.width),
+      h: Math.round(r.height),
+      kind: el.className,
+      text: inner?.textContent ?? null,
+      innerVisible: Boolean(ir && ir.width > 0 && ir.height > 0),
+    }
+  })()`)
+  check('the titlebar shows a tile', Boolean(titleTile), JSON.stringify(titleTile))
+  check(
+    'the titlebar tile is square',
+    titleTile && titleTile.w === titleTile.h && titleTile.w > 0,
+    `${titleTile?.w}x${titleTile?.h}`,
+  )
+  check(
+    'the titlebar tile renders its contents',
+    titleTile?.innerVisible === true,
+    JSON.stringify(titleTile),
+  )
+
   // --- drag it by the titlebar ---
   const before = await js(`(() => { const w = document.querySelector('.window'); return { left: w.offsetLeft, top: w.offsetTop } })()`)
   const titlePoint = await centreOf('.window .titlebar .name')
