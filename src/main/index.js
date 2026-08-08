@@ -6,7 +6,7 @@
  * renderer a URL per app.
  */
 
-import { app, BrowserWindow, ipcMain, session, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, session, shell } from 'electron'
 import crypto from 'node:crypto'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -15,6 +15,7 @@ import fs from 'node:fs/promises'
 
 import { scanApps, readApp } from '../core/registry.js'
 import { createLinkStore } from '../core/links.js'
+import { createSettingsStore, resolveApiKey } from '../core/settings.js'
 import { createSupervisor } from './supervisor.js'
 import { createGateway } from '../gateway/index.js'
 import { AUTH_PARAM, AUTH_HEADER } from '../gateway/auth.js'
@@ -29,7 +30,10 @@ app.commandLine.appendSwitch('host-resolver-rules', 'MAP *.desktop.localhost 127
 
 const TOKEN = crypto.randomBytes(24).toString('hex')
 
+const NO_KEY = 'No Anthropic API key. Add one in Settings, or set ANTHROPIC_API_KEY and relaunch.'
+
 let links = null
+let settings = null
 let mainWindow = null
 let gateway = null
 let apps = new Map()
@@ -40,20 +44,33 @@ const supervisor = createSupervisor({
   },
 })
 
-/** Bundled samples plus anything the user (or the agent) has added. */
+/** Curated directories: bundled samples, plus whatever ⌘K has generated. */
 function appDirectories() {
   return [path.join(projectRoot, 'apps'), path.join(app.getPath('userData'), 'apps')]
 }
 
 async function refreshApps() {
-  const scanned = await Promise.all(appDirectories().map(scanApps))
+  const curated = await Promise.all(appDirectories().map((dir) => scanApps(dir)))
+
+  // The user's own projects folder. Discovery here is opt-in — only folders
+  // carrying a desktop.json — because it is a working directory, not a
+  // curated one. See scanApps.
+  const { appsFolder } = await settings.read()
+  const discovered = appsFolder ? await scanApps(appsFolder, { requireManifest: true }) : []
 
   // Linked projects live wherever they already are; we read the folder in
   // place rather than copying anything.
   const linkedDirs = await links.list()
   const linked = await Promise.all(linkedDirs.map(readApp))
 
-  const all = [...scanned.flat(), ...linked.map((a) => ({ ...a, linked: true }))]
+  // Later entries win on an id collision, so the order is least to most
+  // explicit: a bundled sample yields to a generated app, which yields to one
+  // found in your projects folder, which yields to a folder you linked by hand.
+  const all = [
+    ...curated.flat(),
+    ...discovered.map((a) => ({ ...a, discovered: true })),
+    ...linked.map((a) => ({ ...a, linked: true })),
+  ]
   apps = new Map(all.map((a) => [a.id, a]))
   return [...apps.values()]
 }
@@ -69,6 +86,7 @@ function serialise(record) {
     id: record.id,
     dir: record.dir,
     linked: record.linked ?? false,
+    discovered: record.discovered ?? false,
     name: record.name,
     icon: record.icon,
     type: record.type,
@@ -124,6 +142,7 @@ async function createWindow() {
 
 app.whenReady().then(async () => {
   links = createLinkStore(path.join(app.getPath('userData'), 'links.json'))
+  settings = createSettingsStore(path.join(app.getPath('userData'), 'settings.json'))
 
   // Authenticate framed apps by header rather than cookie. An app iframe is a
   // cross-site context relative to the file:// renderer, so a SameSite=Lax
@@ -202,6 +221,34 @@ ipcMain.handle('apps:unlink', async (_event, dir) => {
   return { ok: true }
 })
 
+ipcMain.handle('settings:get', async () => {
+  const current = await settings.read()
+  return {
+    ...current,
+    // Never ship the key itself back to the renderer — the UI only needs to
+    // know whether one is set and where it came from.
+    anthropicApiKey: null,
+    hasApiKey: Boolean(resolveApiKey(current)),
+    apiKeyFromEnvironment: !current.anthropicApiKey && Boolean(process.env.ANTHROPIC_API_KEY),
+  }
+})
+
+ipcMain.handle('settings:update', async (_event, patch) => {
+  await settings.update(patch ?? {})
+  const records = await refreshApps()
+  return { ok: true, apps: records.map(serialise) }
+})
+
+ipcMain.handle('settings:chooseFolder', async () => {
+  const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
+    title: 'Choose your projects folder',
+    properties: ['openDirectory', 'createDirectory'],
+  })
+
+  if (canceled || !filePaths?.length) return { ok: false }
+  return { ok: true, dir: filePaths[0] }
+})
+
 ipcMain.handle('apps:reveal', async (_event, id) => {
   const record = apps.get(id)
   if (record) shell.showItemInFolder(record.dir)
@@ -213,19 +260,15 @@ ipcMain.handle('apps:reveal', async (_event, id) => {
 ipcMain.handle('apps:generate', async (_event, prompt) => {
   if (!String(prompt ?? '').trim()) return { ok: false, error: 'Describe what to build.' }
 
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return {
-      ok: false,
-      error: 'No ANTHROPIC_API_KEY in the environment. Set one and relaunch.',
-    }
-  }
+  const apiKey = resolveApiKey(await settings.read())
+  if (!apiKey) return { ok: false, error: NO_KEY }
 
   const generatedDir = path.join(app.getPath('userData'), 'apps')
   await fs.mkdir(generatedDir, { recursive: true })
 
   const generator = createGenerator({
     appsDir: generatedDir,
-    runAgent: createClaudeRunner(),
+    runAgent: createClaudeRunner({ apiKey }),
   })
 
   const result = await generator.generate({
@@ -241,12 +284,11 @@ ipcMain.handle('apps:fix', async (_event, id) => {
   const record = apps.get(id)
   if (!record) return { ok: false, error: `No app called "${id}"` }
 
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return { ok: false, error: 'No ANTHROPIC_API_KEY in the environment. Set one and relaunch.' }
-  }
+  const apiKey = resolveApiKey(await settings.read())
+  if (!apiKey) return { ok: false, error: NO_KEY }
 
   const state = supervisor.get(id)
-  const fixer = createFixer({ runAgent: createClaudeRunner() })
+  const fixer = createFixer({ runAgent: createClaudeRunner({ apiKey }) })
 
   const result = await fixer.fix({
     id,

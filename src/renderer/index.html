@@ -336,6 +336,75 @@
       #progress .line:first-child { border-top: 0; }
       #progress .line.err { color: var(--danger); }
       #progress .line .tick { color: #4ade80; }
+
+      /* Settings */
+      #settings {
+        position: absolute; inset: 0; z-index: 10000;
+        background: rgba(8, 10, 15, 0.55);
+        backdrop-filter: blur(3px);
+        display: flex; justify-content: center;
+        padding-top: 10vh;
+      }
+      #settings[hidden] { display: none; }
+      #settings .sheet {
+        width: min(560px, 90vw);
+        height: fit-content;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+        overflow: hidden;
+      }
+      #settings h2 {
+        margin: 0;
+        padding: 16px 20px;
+        font-size: 14px; font-weight: 600;
+        border-bottom: 1px solid var(--line);
+      }
+      #settings .field {
+        padding: 16px 20px;
+        border-bottom: 1px solid var(--line);
+      }
+      #settings label {
+        display: block;
+        font-size: 12.5px; font-weight: 600;
+        margin-bottom: 4px;
+      }
+      #settings .note {
+        color: var(--muted);
+        font-size: 12px;
+        margin: 0 0 9px;
+        line-height: 1.5;
+      }
+      #settings .row { display: flex; gap: 8px; }
+      #settings input {
+        flex: 1; min-width: 0;
+        background: var(--surface-2);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        color: var(--text);
+        font: inherit; font-size: 13px;
+        padding: 8px 10px;
+      }
+      #settings input:focus { outline: 0; border-color: var(--accent); }
+      #settings input::placeholder { color: var(--muted); }
+      #settings button {
+        border: 1px solid var(--line);
+        background: transparent;
+        color: var(--text);
+        border-radius: 8px;
+        padding: 0 12px; height: 34px;
+        cursor: pointer; font: inherit; font-size: 12.5px;
+        white-space: nowrap;
+      }
+      #settings button:hover { background: rgba(255,255,255,0.07); }
+      #settings button.primary { border-color: var(--accent); color: var(--accent); }
+      #settings .status { font-size: 12px; color: var(--muted); margin-top: 9px; }
+      #settings .status.on { color: #4ade80; }
+      #settings .foot {
+        padding: 12px 20px;
+        display: flex; justify-content: flex-end; gap: 8px;
+      }
     </style>
   </head>
   <body>
@@ -348,6 +417,7 @@
         <button id="new-app">✨ New app</button>
         <span class="hint">or press ⌘K</span>
         <button id="refresh">Refresh</button>
+        <button id="open-settings">Settings</button>
       </footer>
 
       <div id="palette" hidden>
@@ -363,6 +433,55 @@
           <div class="foot">
             <kbd>↵</kbd><span>build</span>
             <kbd>esc</kbd><span>close</span>
+          </div>
+        </div>
+      </div>
+
+      <div id="settings" hidden>
+        <div class="sheet">
+          <h2>Settings</h2>
+
+          <div class="field">
+            <label for="apps-folder">Projects folder</label>
+            <p class="note">
+              Folders in here with a <code>desktop.json</code> appear on the desktop.
+              An empty <code>{}</code> is enough — everything else is inferred.
+            </p>
+            <div class="row">
+              <input
+                id="apps-folder"
+                type="text"
+                placeholder="~/Code"
+                autocomplete="off"
+                spellcheck="false"
+              />
+              <button id="browse-folder">Browse…</button>
+            </div>
+            <div class="status" id="apps-folder-status"></div>
+          </div>
+
+          <div class="field">
+            <label for="api-key">Anthropic API key</label>
+            <p class="note">
+              Needed for ⌘K and Fix with AI. Stored in this machine's app data.
+              Without it, generation only works when launched from a terminal
+              that already has <code>ANTHROPIC_API_KEY</code>.
+            </p>
+            <div class="row">
+              <input
+                id="api-key"
+                type="password"
+                placeholder="sk-ant-…"
+                autocomplete="off"
+                spellcheck="false"
+              />
+            </div>
+            <div class="status" id="api-key-status"></div>
+          </div>
+
+          <div class="foot">
+            <button id="close-settings">Close</button>
+            <button id="save-settings" class="primary">Save</button>
           </div>
         </div>
       </div>

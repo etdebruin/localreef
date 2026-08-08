@@ -141,6 +141,62 @@ app.whenReady().then(async () => {
   const remaining = await js(`document.querySelectorAll('.window').length`)
   check('clicking X closes the window', remaining === 0, `windows=${remaining}`)
 
+  // --- settings: open, edit, save ---
+  const settingsPoint = await centreOf('#open-settings')
+  check('settings button is present', Boolean(settingsPoint))
+  if (settingsPoint) await clickAt(settingsPoint)
+
+  const settingsOpen = await js(`document.getElementById('settings').hidden`)
+  check('clicking Settings opens the sheet', settingsOpen === false, `hidden=${settingsOpen}`)
+
+  // The stub reports a saved key and a configured folder; the sheet has to
+  // reflect that rather than showing empty fields.
+  const folderValue = await js(`document.getElementById('apps-folder').value`)
+  check('the configured folder is populated', folderValue === '/tmp/projects', `value=${folderValue}`)
+
+  // The key must never be sent to the renderer — only its presence.
+  const keyValue = await js(`document.getElementById('api-key').value`)
+  const keyPlaceholder = await js(`document.getElementById('api-key').placeholder`)
+  check('the API key field stays empty', keyValue === '', `value=${JSON.stringify(keyValue)}`)
+  check('a saved key is signalled by placeholder', /saved/i.test(keyPlaceholder), keyPlaceholder)
+
+  // Type a new folder, then save via a real click.
+  await js(`(() => {
+    const el = document.getElementById('apps-folder')
+    el.value = '/tmp/other'
+    return true
+  })()`)
+
+  const savePoint = await centreOf('#save-settings')
+  if (savePoint) await clickAt(savePoint)
+  await wait(250)
+
+  const saved = await js(`window.desktop.__savedSettings()`)
+  check(
+    'saving sends the folder to the main process',
+    saved?.appsFolder === '/tmp/other',
+    JSON.stringify(saved),
+  )
+
+  // An untouched key field must not wipe the saved key.
+  check(
+    'an untouched key field is not sent',
+    saved && !('anthropicApiKey' in saved),
+    JSON.stringify(saved),
+  )
+
+  const closedAfterSave = await js(`document.getElementById('settings').hidden`)
+  check('saving closes the sheet', closedAfterSave === true, `hidden=${closedAfterSave}`)
+
+  // --- escape closes it too ---
+  if (settingsPoint) await clickAt(settingsPoint)
+  win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' })
+  win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' })
+  await wait(150)
+
+  const closedByEsc = await js(`document.getElementById('settings').hidden`)
+  check('escape closes settings', closedByEsc === true, `hidden=${closedByEsc}`)
+
   const failed = results.filter((r) => !r.passed)
   console.log(`\n${results.length - failed.length}/${results.length} passed`)
   app.exit(failed.length === 0 ? 0 : 1)

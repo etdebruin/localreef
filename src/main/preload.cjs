@@ -18,6 +18,10 @@ contextBridge.exposeInMainWorld('desktop', {
   link: (paths) => ipcRenderer.invoke('apps:link', paths),
   unlink: (dir) => ipcRenderer.invoke('apps:unlink', dir),
 
+  getSettings: () => ipcRenderer.invoke('settings:get'),
+  updateSettings: (patch) => ipcRenderer.invoke('settings:update', patch),
+  chooseFolder: () => ipcRenderer.invoke('settings:chooseFolder'),
+
   // Electron removed File.path; this is the supported way to recover the real
   // path of a dropped folder.
   pathForFile: (file) => {

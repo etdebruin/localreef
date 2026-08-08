@@ -64,7 +64,18 @@ export async function readApp(dir) {
   }
 }
 
-export async function scanApps(appsDir) {
+/**
+ * `requireManifest` narrows a scan to folders carrying a `desktop.json`.
+ *
+ * Curated directories — the bundled `apps/`, and `userData/apps/` — hold
+ * nothing but apps, so inference alone is right there. A folder the user
+ * points us at is different: `~/Code` is mostly libraries, forks and scratch
+ * repos, and inferring over it would put sixty icons on the desktop and make
+ * every one with a `dev` script spawnable. So discovery there is opt-in, and
+ * `desktop.json` is the marker. Its contents stay optional — an empty `{}`
+ * says "I am an app" and inference fills in the rest.
+ */
+export async function scanApps(appsDir, { requireManifest = false } = {}) {
   let entries
   try {
     entries = await fs.readdir(appsDir, { withFileTypes: true })
@@ -73,7 +84,23 @@ export async function scanApps(appsDir) {
   }
 
   const folders = entries.filter((e) => e.isDirectory() && !e.name.startsWith('.'))
-  const apps = await Promise.all(folders.map((e) => readApp(path.join(appsDir, e.name))))
+
+  const eligible = requireManifest
+    ? (
+        await Promise.all(
+          folders.map(async (e) => {
+            try {
+              await fs.access(path.join(appsDir, e.name, 'desktop.json'))
+              return e
+            } catch {
+              return null
+            }
+          }),
+        )
+      ).filter(Boolean)
+    : folders
+
+  const apps = await Promise.all(eligible.map((e) => readApp(path.join(appsDir, e.name))))
 
   return apps.sort((a, b) => a.id.localeCompare(b.id))
 }

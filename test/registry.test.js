@@ -126,3 +126,60 @@ test('scanApps', async (t) => {
     assert.deepEqual(await scanApps(path.join(root, 'nope')), [])
   })
 })
+
+// A curated folder (apps/, userData/apps/) is one where everything is an app,
+// so inference alone is safe. A folder the user points us at — ~/Code — is
+// not: it is full of libraries, forks and scratch repos. There, desktop.json
+// is the opt-in marker. Its *contents* stay optional; an empty {} is enough.
+test('scanApps with requireManifest', async (t) => {
+  const root = await tmp()
+  t.after(() => fs.rm(root, { recursive: true, force: true }))
+
+  await makeApp(root, 'notes', { 'index.html': 'x', 'desktop.json': '{}' })
+  await makeApp(root, 'chart', {
+    'package.json': JSON.stringify({ scripts: { dev: 'vite' } }),
+    'desktop.json': JSON.stringify({ icon: '📈' }),
+  })
+  await makeApp(root, 'some-lib', { 'package.json': JSON.stringify({ scripts: { dev: 'vite' } }) })
+  await makeApp(root, 'scratch', { 'index.html': 'x' })
+  await makeApp(root, 'node_modules', { 'package.json': '{}' })
+
+  await t.test('includes only folders that opted in with a manifest', async () => {
+    const apps = await scanApps(root, { requireManifest: true })
+    assert.deepEqual(
+      apps.map((a) => a.id),
+      ['chart', 'notes'],
+    )
+  })
+
+  await t.test('an empty manifest is enough to opt in, inference still fills it', async () => {
+    const apps = await scanApps(root, { requireManifest: true })
+    const notes = apps.find((a) => a.id === 'notes')
+    assert.equal(notes.type, 'static')
+    assert.equal(notes.error, undefined)
+  })
+
+  await t.test('a runnable folder without a manifest stays off the desktop', async () => {
+    const apps = await scanApps(root, { requireManifest: true })
+    assert.equal(apps.find((a) => a.id === 'some-lib'), undefined)
+    assert.equal(apps.find((a) => a.id === 'scratch'), undefined)
+    assert.equal(apps.find((a) => a.id === 'node_modules'), undefined)
+  })
+
+  await t.test('a folder that opted in with a broken manifest still appears', async () => {
+    // It asked to be here, so it gets a broken icon that says why — never a
+    // silent omission.
+    const dir = await makeApp(root, 'busted', { 'index.html': 'x', 'desktop.json': '{ not json' })
+    const apps = await scanApps(root, { requireManifest: true })
+    const busted = apps.find((a) => a.id === 'busted')
+
+    assert.ok(busted, 'expected the opted-in folder to be listed')
+    assert.match(busted.error, /desktop\.json/)
+    await fs.rm(dir, { recursive: true, force: true })
+  })
+
+  await t.test('without the option every folder is still scanned', async () => {
+    const apps = await scanApps(root)
+    assert.ok(apps.find((a) => a.id === 'some-lib'), 'curated scans keep inferring')
+  })
+})

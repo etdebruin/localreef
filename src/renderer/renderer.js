@@ -362,7 +362,10 @@ document.addEventListener('keydown', (event) => {
     paletteEl.hidden ? openPalette() : closePalette()
     return
   }
-  if (event.key === 'Escape') closePalette()
+  if (event.key === 'Escape') {
+    closePalette()
+    settingsEl.hidden = true
+  }
 })
 
 paletteEl.addEventListener('mousedown', (event) => {
@@ -432,6 +435,103 @@ desktopEl.addEventListener('drop', async (event) => {
     toast(result.errors[0].error, { error: true })
   } else {
     toast(`Linked ${result.linked} folder${result.linked === 1 ? '' : 's'}`)
+  }
+})
+
+// ------------------------------------------------------------- settings
+
+const settingsEl = document.getElementById('settings')
+const appsFolderEl = document.getElementById('apps-folder')
+const appsFolderStatusEl = document.getElementById('apps-folder-status')
+const apiKeyEl = document.getElementById('api-key')
+const apiKeyStatusEl = document.getElementById('api-key-status')
+
+function setStatus(el, text, { on = false } = {}) {
+  el.textContent = text
+  el.classList.toggle('on', on)
+}
+
+async function openSettings() {
+  const settings = await window.desktop.getSettings()
+
+  appsFolderEl.value = settings.appsFolder ?? ''
+
+  // The key itself never leaves the main process, so the field starts empty
+  // and typing into it is the only way to change it.
+  apiKeyEl.value = ''
+  if (settings.apiKeyFromEnvironment) {
+    apiKeyEl.placeholder = 'Using ANTHROPIC_API_KEY from the environment'
+    setStatus(apiKeyStatusEl, 'Inherited from the shell this was launched from.', { on: true })
+  } else if (settings.hasApiKey) {
+    apiKeyEl.placeholder = 'Saved — type to replace'
+    setStatus(apiKeyStatusEl, 'A key is saved.', { on: true })
+  } else {
+    apiKeyEl.placeholder = 'sk-ant-…'
+    setStatus(apiKeyStatusEl, 'No key. ⌘K and Fix with AI are unavailable.')
+  }
+
+  await countDiscovered(settings.appsFolder)
+  settingsEl.hidden = false
+  appsFolderEl.focus()
+}
+
+/** Say how many apps the folder actually yields — a silent zero reads as broken. */
+async function countDiscovered(folder) {
+  if (!folder) {
+    setStatus(appsFolderStatusEl, 'No folder set.')
+    return
+  }
+
+  const apps = await window.desktop.listApps()
+  const found = apps.filter((a) => a.discovered).length
+
+  if (found === 0) {
+    setStatus(appsFolderStatusEl, 'No apps found — add a desktop.json to a project in here.')
+  } else {
+    setStatus(appsFolderStatusEl, `Found ${found} app${found === 1 ? '' : 's'}.`, { on: true })
+  }
+}
+
+const closeSettings = () => {
+  settingsEl.hidden = true
+}
+
+async function saveSettings() {
+  const patch = { appsFolder: appsFolderEl.value }
+
+  // An untouched field must not wipe a saved key, so only send what was typed.
+  if (apiKeyEl.value.trim()) patch.anthropicApiKey = apiKeyEl.value
+
+  const result = await window.desktop.updateSettings(patch)
+  if (!result.ok) {
+    toast('Could not save settings', { error: true })
+    return
+  }
+
+  await renderIcons()
+  closeSettings()
+
+  const found = result.apps.filter((a) => a.discovered).length
+  toast(found ? `Settings saved — ${found} app${found === 1 ? '' : 's'} found` : 'Settings saved')
+}
+
+document.getElementById('browse-folder').addEventListener('click', async () => {
+  const result = await window.desktop.chooseFolder()
+  if (result.ok) appsFolderEl.value = result.dir
+})
+
+document.getElementById('open-settings').addEventListener('click', openSettings)
+document.getElementById('close-settings').addEventListener('click', closeSettings)
+document.getElementById('save-settings').addEventListener('click', saveSettings)
+
+settingsEl.addEventListener('mousedown', (event) => {
+  if (event.target === settingsEl) closeSettings()
+})
+
+settingsEl.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') {
+    event.preventDefault()
+    saveSettings()
   }
 })
 
