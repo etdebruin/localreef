@@ -117,6 +117,39 @@ app.whenReady().then(async () => {
   const openedUnder = await js(`document.querySelectorAll('.window').length`)
   check('clicking a dock app still opens its window', openedUnder === 1, `windows=${openedUnder}`)
 
+  // --- the greeting is scenery, not chrome: a window paints over it ---
+  // pointer-events: none makes elementFromPoint blind to paint order, so
+  // this is measured from the pixels: park the window squarely over the
+  // card (its stage is opaque white — the stub launches about:blank), then
+  // hide the card. If the window is on top, nothing changes. If the card
+  // was painting over the window, its text shadows vanish from the image.
+  const helloRect = await js(`(() => {
+    const r = document.getElementById('hello').getBoundingClientRect()
+    const w = document.querySelector('.window')
+    w.style.left = Math.round(r.x - 60) + 'px'
+    w.style.top = Math.round(r.y - 70) + 'px'
+    w.style.width = Math.round(r.width + 120) + 'px'
+    w.style.height = Math.round(r.height + 140) + 'px'
+    return { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height) }
+  })()`)
+  await wait(400)
+  await shot('hello-under-window')
+  const overWindow = (await win.webContents.capturePage(helloRect)).toBitmap()
+  await js(`document.getElementById('hello').style.visibility = 'hidden'`)
+  await wait(300)
+  const noHello = (await win.webContents.capturePage(helloRect)).toBitmap()
+  await js(`document.getElementById('hello').style.visibility = ''`)
+  let changed = 0
+  for (let i = 0; i < overWindow.length; i += 1) {
+    if (Math.abs(overWindow[i] - noHello[i]) > 8) changed += 1
+  }
+  const changedRatio = changed / overWindow.length
+  check(
+    'an open window paints over the greeting',
+    changedRatio < 0.001,
+    `${(changedRatio * 100).toFixed(2)}% of the covered region changed when the card was hidden`,
+  )
+
   // Close it again so the rest of the flow runs on a clean desktop.
   const closePoint = await centreOf('.window .titlebar button.close')
   if (closePoint) await clickAt(closePoint)
