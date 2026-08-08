@@ -6,12 +6,12 @@
   "homepage": "https://localreef.com",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/etdebruin/localreef.git"
+    "url": "git+https://github.com/everydev1618/localreef.git"
   },
   "bugs": {
-    "url": "https://github.com/etdebruin/localreef/issues"
+    "url": "https://github.com/everydev1618/localreef/issues"
   },
-  "license": "MIT",
+  "license": "UNLICENSED",
   "author": "Etienne de Bruin",
   "keywords": [
     "electron",
