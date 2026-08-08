@@ -148,17 +148,47 @@ app.whenReady().then(async () => {
   const shieldHidden = await js(`document.getElementById('shield').hidden`)
   check('the drag shield is released afterwards', shieldHidden === true)
 
+  // The drag has made its assertion; put the window back at a known position
+  // so everything after it clicks at predictable coordinates. Physical mouse
+  // movement over the harness window mixes real pointermove events into the
+  // synthetic drag, and a window left off at x=1036 puts the titlebar buttons
+  // outside the viewport — every later check then fails for the wrong reason.
+  await js(`(() => {
+    const w = document.querySelector('.window')
+    if (!w) return false
+    w.style.left = '90px'
+    w.style.top = '70px'
+    return true
+  })()`)
+  await wait(80)
+
   // --- minimize sends the window to the dock, not to oblivion ---
   const minPoint = await centreOf('.window .titlebar button.minimize')
   check('minimize button is present', Boolean(minPoint))
   if (minPoint) await clickAt(minPoint)
 
+  // Assert it actually vanished, not merely that the property flipped. The
+  // `hidden` attribute only hides via a UA rule, and any author-level display
+  // rule outranks it — .window sets display:flex, so setting hidden looked
+  // right in the DOM while the window stayed fully on screen.
   const minimized = await js(`(() => {
     const w = document.querySelector('.window')
-    return w ? { present: true, hidden: w.hidden } : { present: false }
+    if (!w) return { present: false }
+    const r = w.getBoundingClientRect()
+    return {
+      present: true,
+      hidden: w.hidden,
+      onScreen: r.width > 0 && r.height > 0,
+      display: getComputedStyle(w).display,
+    }
   })()`)
   check(
-    'minimize hides the window without destroying it',
+    'minimize takes the window off screen',
+    minimized.present === true && minimized.onScreen === false,
+    JSON.stringify(minimized),
+  )
+  check(
+    'minimize does not destroy the window',
     minimized.present === true && minimized.hidden === true,
     JSON.stringify(minimized),
   )
@@ -182,9 +212,15 @@ app.whenReady().then(async () => {
 
   const restored = await js(`(() => {
     const w = document.querySelector('.window')
-    return w ? w.hidden : null
+    if (!w) return { present: false }
+    const r = w.getBoundingClientRect()
+    return { present: true, hidden: w.hidden, onScreen: r.width > 0 && r.height > 0 }
   })()`)
-  check('clicking the dock icon restores it', restored === false, `hidden=${restored}`)
+  check(
+    'clicking the dock icon puts it back on screen',
+    restored.hidden === false && restored.onScreen === true,
+    JSON.stringify(restored),
+  )
 
   const stillOne = await js(`document.querySelectorAll('.window').length`)
   check('restoring does not open a second window', stillOne === 1, `windows=${stillOne}`)

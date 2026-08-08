@@ -172,6 +172,11 @@
       /* × stops the app, so it reads as the destructive one of the pair. */
       .titlebar button.close:hover { background: #5b2b2b; border-color: #7a3b3b; color: #fff; }
 
+      /* `hidden` only hides through a UA rule, which any author-level display
+         declaration outranks — and .window sets display:flex. Without this,
+         minimizing set the attribute and changed nothing on screen. */
+      .window[hidden] { display: none; }
+
       .window .body { flex: 1; position: relative; background: #fff; }
       .window iframe { width: 100%; height: 100%; border: 0; display: block; }
 
