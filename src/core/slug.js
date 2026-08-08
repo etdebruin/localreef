@@ -1,9 +1,9 @@
 /**
  * Deriving an app id from a description.
  *
- * The id becomes a hostname label (`<id>.colony.localhost`) and a folder
+ * The id becomes a hostname label (`<id>.reef.localhost`) and a folder
  * name, so it has to be short, lowercase, and pass the router's own check.
- * The pretty name lives in colony.json and can be anything.
+ * The pretty name lives in reef.json and can be anything.
  */
 
 const MAX_WORDS = 3

@@ -63,7 +63,7 @@ reaches main through the preload bridge in `src/main/preload.cjs`.
 
 `app://notes/` was the original design and **does not work**: Chromium custom
 schemes cannot carry a WebSocket, and Vite HMR is a WebSocket. Everything
-routes through one loopback HTTP server on `*.colony.localhost`, which also
+routes through one loopback HTTP server on `*.reef.localhost`, which also
 buys per-app origins (storage partitioning for free) and secure-context APIs,
 since Chromium treats `.localhost` as trustworthy.
 
@@ -72,13 +72,13 @@ resolver to honour RFC 6761.
 
 ### Auth is a header, not a cookie
 
-`AUTH_HEADER` (`x-colony-token`) is injected by Electron via
-`webRequest.onBeforeSendHeaders`, scoped to `*.colony.localhost`, and stripped
+`AUTH_HEADER` (`x-reef-token`) is injected by Electron via
+`webRequest.onBeforeSendHeaders`, scoped to `*.reef.localhost`, and stripped
 before forwarding so app servers never see it.
 
 **The filter must list `ws://` and `wss://` explicitly.** A `*` scheme in a
 Chrome match pattern means http or https and *nothing else*, so
-`*://*.colony.localhost/*` never matched a WebSocket handshake. Every app's
+`*://*.reef.localhost/*` never matched a WebSocket handshake. Every app's
 upgrade reached the gateway with no credential and was destroyed — the clock
 sample sat on "disconnected — retrying" and Vite HMR was dead in the real app
 while `test:vite` stayed green, because that harness sets the header itself.
@@ -87,7 +87,7 @@ while `test:vite` stayed green, because that harness sets the header itself.
 
 **Do not "simplify" this back to the cookie.** An app iframe is a cross-site
 context relative to the `file://` renderer, so a `SameSite=Lax` cookie is set
-and then never sent back — every app 401s. The cookie and `?__colony=` param
+and then never sent back — every app 401s. The cookie and `?__reef=` param
 paths remain as fallbacks. `test/electron/iframe-auth.mjs` exists solely to
 guard this.
 

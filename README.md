@@ -1,4 +1,4 @@
-# Local Colony
+# Local Reef
 
 A desktop for local apps. Click an icon, your app opens — no terminal, no
 `npm run dev`, no remembering which port anything is on.
@@ -27,7 +27,7 @@ Press **⌘K**, describe what you want, hit Enter:
 ⌘K → "a pomodoro timer with session history"
 
   ✓ wrote index.html
-  ✓ wrote colony.json
+  ✓ wrote reef.json
   ✓ Built pomodoro-timer-session      → 🍅 icon appears, opens
 ```
 
@@ -35,7 +35,7 @@ Takes roughly two minutes. The result is a single self-contained `index.html`
 with no build step and no install, so it opens the moment it exists.
 
 Needs `ANTHROPIC_API_KEY` in the environment. Generated apps are written to
-`~/Library/Application Support/Local Colony/apps/`, never into this repo — so
+`~/Library/Application Support/Local Reef/apps/`, never into this repo — so
 `apps/` stays yours.
 
 The model writes files through a toolset confined to that one app folder;
@@ -63,7 +63,7 @@ Drag its folder onto the desktop. Nothing is copied — the folder stays where i
 is, so editing it in your editor edits what the desktop runs.
 
 Most projects need no configuration. One that does — a Python FastAPI app whose
-own entrypoint hardcodes a port — needs a four-line `colony.json` in its root:
+own entrypoint hardcodes a port — needs a four-line `reef.json` in its root:
 
 ```json
 {
@@ -93,7 +93,7 @@ apps/my-thing/
   package.json          → with a "dev" or "start" script: spawned and proxied
 ```
 
-Add a `colony.json` only to override something. Every field is optional:
+Add a `reef.json` only to override something. Every field is optional:
 
 ```json
 {
@@ -112,12 +112,12 @@ behind it: [DESIGN.md](./DESIGN.md).
 ```
 PORT             a free port, assigned for you
 HOST             127.0.0.1
-COLONY_APP_ID   "my-thing"
-COLONY          "1"
+REEF_APP_ID   "my-thing"
+REEF          "1"
 ```
 
 Bind to `HOST`, not `0.0.0.0`. If your framework ignores `PORT` — Vite does —
-Local Colony reads the port out of your server's startup output instead, so
+Local Reef reads the port out of your server's startup output instead, so
 it works either way.
 
 ---
@@ -127,8 +127,8 @@ it works either way.
 One local HTTP gateway fronts every app and routes on the hostname:
 
 ```
-notes.colony.localhost  ──▶  gateway  ──▶  files on disk
-clock.colony.localhost  ──▶  gateway  ──▶  127.0.0.1:51823  (spawned process)
+notes.reef.localhost  ──▶  gateway  ──▶  files on disk
+clock.reef.localhost  ──▶  gateway  ──▶  127.0.0.1:51823  (spawned process)
 ```
 
 Each app gets its own origin, so storage and cookies are partitioned by the

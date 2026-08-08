@@ -68,7 +68,7 @@ function tileFor(app, className = 'tile') {
  * icons small, in a fixed place, and out of the way of the windows.
  */
 async function renderDock() {
-  const apps = await window.colony.listApps()
+  const apps = await window.reef.listApps()
   dockAppsEl.replaceChildren()
   dockButtons.clear()
 
@@ -127,7 +127,7 @@ function closeWindow(id) {
   openWindows.delete(id)
   // Static apps have no process; stopping a server app frees it immediately
   // rather than waiting out keepAlive, which is the right call for M1.
-  if (win.app.type && win.app.type !== 'static') window.colony.stop(id)
+  if (win.app.type && win.app.type !== 'static') window.reef.stop(id)
   syncDock()
 }
 
@@ -290,11 +290,11 @@ function fixPanel(win, app, onDone) {
       log,
     )
 
-    const stop = window.colony.onFixing(({ phase, file }) => {
+    const stop = window.reef.onFixing(({ phase, file }) => {
       if (phase === 'writing') log.append(h('div', { textContent: `✓ rewrote ${file}` }))
     })
 
-    const result = await window.colony.fix(app.id)
+    const result = await window.reef.fix(app.id)
     stop?.()
 
     if (!result.ok) {
@@ -320,7 +320,7 @@ function fixPanel(win, app, onDone) {
 
 async function reopen(id) {
   closeWindow(id)
-  const apps = await window.colony.listApps()
+  const apps = await window.reef.listApps()
   const fresh = apps.find((a) => a.id === id)
   if (fresh) openApp(fresh)
 }
@@ -348,7 +348,7 @@ async function openApp(app) {
     h('div', { textContent: app.type === 'static' ? 'Opening…' : 'Starting server…' }),
   )
 
-  const result = await window.colony.launch(app.id)
+  const result = await window.reef.launch(app.id)
 
   // The window may have been closed while the server was coming up.
   if (!openWindows.has(app.id)) return
@@ -408,7 +408,7 @@ async function build() {
 
   const pending = progressLine('Designing the app…', { icon: '▸' })
 
-  const result = await window.colony.generate(prompt)
+  const result = await window.reef.generate(prompt)
   pending.remove()
   generating = false
   promptEl.disabled = false
@@ -425,13 +425,13 @@ async function build() {
   // Give the success line a beat to register before the app takes over.
   setTimeout(async () => {
     paletteEl.hidden = true
-    const apps = await window.colony.listApps()
+    const apps = await window.reef.listApps()
     const created = apps.find((a) => a.id === result.id)
     if (created) openApp(created)
   }, 450)
 }
 
-window.colony.onGenerating(({ phase, file }) => {
+window.reef.onGenerating(({ phase, file }) => {
   if (!generating) return
   if (phase === 'writing') progressLine(`Writing ${file}`, { icon: '✓' })
 })
@@ -510,12 +510,12 @@ canvasEl.addEventListener('drop', async (event) => {
   clearDropState()
 
   const paths = [...(event.dataTransfer?.files ?? [])]
-    .map((file) => window.colony.pathForFile(file))
+    .map((file) => window.reef.pathForFile(file))
     .filter(Boolean)
 
   if (!paths.length) return
 
-  const result = await window.colony.link(paths)
+  const result = await window.reef.link(paths)
   await renderDock()
 
   if (result.errors?.length) {
@@ -539,7 +539,7 @@ function setStatus(el, text, { on = false } = {}) {
 }
 
 async function openSettings() {
-  const settings = await window.colony.getSettings()
+  const settings = await window.reef.getSettings()
 
   appsFolderEl.value = settings.appsFolder ?? ''
 
@@ -569,11 +569,11 @@ async function countDiscovered(folder) {
     return
   }
 
-  const apps = await window.colony.listApps()
+  const apps = await window.reef.listApps()
   const found = apps.filter((a) => a.discovered).length
 
   if (found === 0) {
-    setStatus(appsFolderStatusEl, 'No apps found — add a colony.json to a project in here.')
+    setStatus(appsFolderStatusEl, 'No apps found — add a reef.json to a project in here.')
   } else {
     setStatus(appsFolderStatusEl, `Found ${found} app${found === 1 ? '' : 's'}.`, { on: true })
   }
@@ -589,7 +589,7 @@ async function saveSettings() {
   // An untouched field must not wipe a saved key, so only send what was typed.
   if (apiKeyEl.value.trim()) patch.anthropicApiKey = apiKeyEl.value
 
-  const result = await window.colony.updateSettings(patch)
+  const result = await window.reef.updateSettings(patch)
   if (!result.ok) {
     toast('Could not save settings', { error: true })
     return
@@ -603,7 +603,7 @@ async function saveSettings() {
 }
 
 document.getElementById('browse-folder').addEventListener('click', async () => {
-  const result = await window.colony.chooseFolder()
+  const result = await window.reef.chooseFolder()
   if (result.ok) appsFolderEl.value = result.dir
 })
 
@@ -626,7 +626,7 @@ settingsEl.addEventListener('keydown', (event) => {
 
 refreshEl.addEventListener('click', renderDock)
 
-window.colony.onState(({ id, status, error, logs }) => {
+window.reef.onState(({ id, status, error, logs }) => {
   const win = openWindows.get(id)
   if (win && status === 'crashed') {
     showState(

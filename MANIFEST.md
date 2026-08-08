@@ -1,9 +1,9 @@
-# Local Colony app format
+# Local Reef app format
 
-An app is a folder. **The manifest is optional** — Local Colony infers what it can, and you
-only write `colony.json` to override something it got wrong or to declare a capability.
+An app is a folder. **The manifest is optional** — Local Reef infers what it can, and you
+only write `reef.json` to override something it got wrong or to declare a capability.
 
-An app that works in Local Colony still runs standalone outside it. That's a constraint, not a
+An app that works in Local Reef still runs standalone outside it. That's a constraint, not a
 nice-to-have: it's what keeps these from being locked into the shell.
 
 ---
@@ -25,7 +25,7 @@ Applied in order; first match wins.
 
 ---
 
-## `colony.json`
+## `reef.json`
 
 Every field is optional.
 
@@ -52,7 +52,7 @@ Every field is optional.
 | `root` | `dist` if present, else `.` | Static only — directory to serve |
 | `run` | inferred from `package.json` | Server only — the spawn command. `$PORT` is expanded. |
 | `port` | assigned automatically | Only for servers that hardcode their port and ignore `PORT` |
-| `env` | `{}` | Merged over Local Colony's injected vars (below) |
+| `env` | `{}` | Merged over Local Reef's injected vars (below) |
 | `keepAlive` | `300` | Seconds to stay warm after the last window closes. `0` = stop immediately, `-1` = never stop. |
 | `window` | `{ width: 800, height: 600, resizable: true }` | Initial geometry; user resizes are persisted and win afterward |
 | `permissions` | `[]` | See below |
@@ -82,12 +82,12 @@ chroma, so a desktop of them looks like a set.
 ```
 PORT             assigned ephemeral port
 HOST             127.0.0.1
-COLONY_APP_ID      "notes"
-COLONY_DATA_DIR    ~/Library/Application Support/Local Colony/data/notes
-COLONY             "1"
+REEF_APP_ID      "notes"
+REEF_DATA_DIR    ~/Library/Application Support/Local Reef/data/notes
+REEF             "1"
 ```
 
-Bind to `HOST`, not `0.0.0.0`. If your framework ignores `PORT` (Vite does), Local Colony
+Bind to `HOST`, not `0.0.0.0`. If your framework ignores `PORT` (Vite does), Local Reef
 adopts whatever port your server prints to stdout instead — you don't have to do
 anything, but honoring `PORT` makes startup faster and more reliable.
 
@@ -107,7 +107,7 @@ honours `$PORT`:
 ```
 
 If the server hardcodes its port and cannot be told otherwise, declare it
-instead and Local Colony will look for it there:
+instead and Local Reef will look for it there:
 
 ```json
 { "type": "server", "run": "./serve", "port": 8765 }
@@ -119,14 +119,14 @@ instead and Local Colony will look for it there:
 
 ## Permissions
 
-Absent from the manifest means denied. Local Colony prompts on first use and remembers the
+Absent from the manifest means denied. Local Reef prompts on first use and remembers the
 answer.
 
 | Permission | Grants |
 |---|---|
-| `storage` | `colony.storage.*` — per-app persisted KV |
-| `ai` | `colony.ai.complete()` — model access through Local Colony's key, rate-limited |
-| `notify` | `colony.notify()` |
+| `storage` | `reef.storage.*` — per-app persisted KV |
+| `ai` | `reef.ai.complete()` — model access through Local Reef's key, rate-limited |
+| `notify` | `reef.notify()` |
 | `net:<host>` | Outbound fetch to that host. Repeat per host. `net:*` is allowed but always prompts. |
 | `shared` | Read/write the cross-app store (v1.5) |
 
@@ -162,7 +162,7 @@ chart/
   src/
 ```
 
-Also zero config. Local Colony spawns it, adopts the port Vite prints, and proxies WebSocket
+Also zero config. Local Reef spawns it, adopts the port Vite prints, and proxies WebSocket
 upgrades so HMR works.
 
 **Node server needing an override:**
@@ -183,11 +183,11 @@ upgrades so HMR works.
 
 ## Reserved paths
 
-The gateway owns `/__colony/*` on every app origin and will shadow anything you put
+The gateway owns `/__reef/*` on every app origin and will shadow anything you put
 there:
 
 | Path | Serves |
 |---|---|
-| `/__colony/sdk.js` | The SDK bridge |
-| `/__colony/vendor/*` | Local React, etc. — no CDN, works offline |
-| `/__colony/health` | Gateway readiness probe |
+| `/__reef/sdk.js` | The SDK bridge |
+| `/__reef/vendor/*` | Local React, etc. — no CDN, works offline |
+| `/__reef/health` | Gateway readiness probe |

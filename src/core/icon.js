@@ -80,7 +80,7 @@ export function hueFor(id) {
 /**
  * Load a manifest-declared icon file as a data URI, or null.
  *
- * The path comes out of `colony.json`, which the user or the model wrote, so
+ * The path comes out of `reef.json`, which the user or the model wrote, so
  * it is untrusted: it is resolved through the same confinement the gateway
  * uses for request paths and rejected if it leaves the app folder.
  */

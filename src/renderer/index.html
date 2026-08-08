@@ -13,10 +13,10 @@
                script-src 'self';
                style-src 'unsafe-inline';
                img-src 'self' data:;
-               frame-src http://*.colony.localhost:*;
+               frame-src http://*.reef.localhost:*;
                connect-src 'self'"
     />
-    <title>Local Colony</title>
+    <title>Local Reef</title>
     <style>
       :root {
         --bg: #11131a;
@@ -521,7 +521,7 @@
   </head>
   <body>
     <div id="canvas">
-      <div id="chrome">Local Colony</div>
+      <div id="chrome">Local Reef</div>
       <div id="empty" hidden>No apps yet — press ⌘K to build one</div>
       <div id="windows"></div>
       <div id="shield" hidden></div>
@@ -557,7 +557,7 @@
           <div class="field">
             <label for="apps-folder">Projects folder</label>
             <p class="note">
-              Folders in here with a <code>colony.json</code> appear on the desktop.
+              Folders in here with a <code>reef.json</code> appear on the desktop.
               An empty <code>{}</code> is enough — everything else is inferred.
             </p>
             <div class="row">

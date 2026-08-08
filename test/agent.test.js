@@ -102,7 +102,7 @@ test('createGenerator', async (t) => {
       const map = toolMap(tools)
       await map.write_file.run({ path: 'index.html', content: '<h1>Mileage</h1>' })
       await map.write_file.run({
-        path: 'colony.json',
+        path: 'reef.json',
         content: JSON.stringify({ name: 'Mileage', icon: '🏃' }),
       })
       return { stop_reason: 'end_turn' }
@@ -113,7 +113,9 @@ test('createGenerator', async (t) => {
 
     assert.equal(result.ok, true)
     assert.equal(result.id, 'track-running-mileage')
-    assert.deepEqual(result.files.sort(), ['colony.json', 'index.html'])
+    // Both sides sorted: the expectation should not depend on where the
+    // manifest filename happens to fall alphabetically.
+    assert.deepEqual(result.files.sort(), ['index.html', 'reef.json'].sort())
     assert.match(
       await fs.readFile(path.join(appsDir, result.id, 'index.html'), 'utf8'),
       /Mileage/,

@@ -54,10 +54,10 @@ test('readApp', async (t) => {
     assert.equal(app.run, 'pnpm run dev')
   })
 
-  await t.test('colony.json overrides inference', async () => {
+  await t.test('reef.json overrides inference', async () => {
     const dir = await makeApp(root, 'feed', {
       'package.json': JSON.stringify({ scripts: { dev: 'vite' } }),
-      'colony.json': JSON.stringify({ name: 'Feed Reader', icon: '📡', keepAlive: -1 }),
+      'reef.json': JSON.stringify({ name: 'Feed Reader', icon: '📡', keepAlive: -1 }),
     })
     const app = await readApp(dir)
     assert.equal(app.name, 'Feed Reader')
@@ -89,10 +89,10 @@ test('readApp', async (t) => {
     assert.ok(app.error, 'expected an error, got none')
   })
 
-  await t.test('survives malformed colony.json', async () => {
+  await t.test('survives malformed reef.json', async () => {
     const dir = await makeApp(root, 'broken2', {
       'index.html': 'x',
-      'colony.json': '{ nope',
+      'reef.json': '{ nope',
     })
     const app = await readApp(dir)
     assert.ok(app.error, 'expected an error, got none')
@@ -129,16 +129,16 @@ test('scanApps', async (t) => {
 
 // A curated folder (apps/, userData/apps/) is one where everything is an app,
 // so inference alone is safe. A folder the user points us at — ~/Code — is
-// not: it is full of libraries, forks and scratch repos. There, colony.json
+// not: it is full of libraries, forks and scratch repos. There, reef.json
 // is the opt-in marker. Its *contents* stay optional; an empty {} is enough.
 test('scanApps with requireManifest', async (t) => {
   const root = await tmp()
   t.after(() => fs.rm(root, { recursive: true, force: true }))
 
-  await makeApp(root, 'notes', { 'index.html': 'x', 'colony.json': '{}' })
+  await makeApp(root, 'notes', { 'index.html': 'x', 'reef.json': '{}' })
   await makeApp(root, 'chart', {
     'package.json': JSON.stringify({ scripts: { dev: 'vite' } }),
-    'colony.json': JSON.stringify({ icon: '📈' }),
+    'reef.json': JSON.stringify({ icon: '📈' }),
   })
   await makeApp(root, 'some-lib', { 'package.json': JSON.stringify({ scripts: { dev: 'vite' } }) })
   await makeApp(root, 'scratch', { 'index.html': 'x' })
@@ -169,12 +169,12 @@ test('scanApps with requireManifest', async (t) => {
   await t.test('a folder that opted in with a broken manifest still appears', async () => {
     // It asked to be here, so it gets a broken icon that says why — never a
     // silent omission.
-    const dir = await makeApp(root, 'busted', { 'index.html': 'x', 'colony.json': '{ not json' })
+    const dir = await makeApp(root, 'busted', { 'index.html': 'x', 'reef.json': '{ not json' })
     const apps = await scanApps(root, { requireManifest: true })
     const busted = apps.find((a) => a.id === 'busted')
 
     assert.ok(busted, 'expected the opted-in folder to be listed')
-    assert.match(busted.error, /colony\.json/)
+    assert.match(busted.error, /reef\.json/)
     await fs.rm(dir, { recursive: true, force: true })
   })
 

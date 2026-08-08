@@ -48,6 +48,6 @@ export function detectAppType({ files = [], pkg = null } = {}) {
     type: null,
     reason:
       'No index.html, and no dev or start script in package.json. ' +
-      'Add one, or set "type" and "run" in colony.json.',
+      'Add one, or set "type" and "run" in reef.json.',
   }
 }

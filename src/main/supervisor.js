@@ -119,9 +119,9 @@ export function createSupervisor({ onChange = () => {}, readyTimeoutMs = 30000 }
         PATH: await userPath(),
         PORT: String(assignedPort),
         HOST: '127.0.0.1',
-        COLONY: '1',
-        COLONY_APP_ID: app.id,
-        ...(app.dataDir ? { COLONY_DATA_DIR: app.dataDir } : {}),
+        REEF: '1',
+        REEF_APP_ID: app.id,
+        ...(app.dataDir ? { REEF_DATA_DIR: app.dataDir } : {}),
         ...(app.env ?? {}),
       },
     })

@@ -6,7 +6,7 @@ const { contextBridge } = require('electron')
 // the test to read. Keep it here and hand it back through the bridge instead.
 let savedSettings = null
 
-contextBridge.exposeInMainWorld('colony', {
+contextBridge.exposeInMainWorld('reef', {
   // Two apps so the tile modes are both exercised: one declaring an emoji,
   // one declaring nothing and falling back to a generated tile.
   listApps: async () => [

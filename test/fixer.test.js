@@ -20,7 +20,7 @@ test('createFixer', async (t) => {
   await t.test('edits the existing app in place and reports what changed', async () => {
     const dir = await brokenApp({
       'index.html': '<h1>broken</h1>',
-      'colony.json': '{"name":"Thing"}',
+      'reef.json': '{"name":"Thing"}',
     })
 
     const runAgent = async ({ tools }) => {
@@ -35,7 +35,7 @@ test('createFixer', async (t) => {
     assert.deepEqual(result.files, ['index.html'])
     assert.equal(await fs.readFile(path.join(dir, 'index.html'), 'utf8'), '<h1>fixed</h1>')
     // Untouched files stay untouched.
-    assert.equal(await fs.readFile(path.join(dir, 'colony.json'), 'utf8'), '{"name":"Thing"}')
+    assert.equal(await fs.readFile(path.join(dir, 'reef.json'), 'utf8'), '{"name":"Thing"}')
     await fs.rm(dir, { recursive: true, force: true })
   })
 

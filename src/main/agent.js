@@ -17,11 +17,11 @@ import { slugify, uniqueId } from '../core/slug.js'
 
 export const MODEL = 'claude-opus-5'
 
-const SYSTEM_PROMPT = `You generate small, self-contained apps for Local Colony, a desktop shell that runs local apps in windows.
+const SYSTEM_PROMPT = `You generate small, self-contained apps for Local Reef, a desktop shell that runs local apps in windows.
 
 Output:
 - Write a single \`index.html\` with all markup, CSS and JavaScript inline. Only add more files if the app is genuinely large.
-- Also write \`colony.json\` containing a display \`name\` and a single-emoji \`icon\`.
+- Also write \`reef.json\` containing a display \`name\` and a single-emoji \`icon\`.
 
 Hard constraints:
 - No network requests of any kind: no CDNs, no external fonts, no remote images. The app must work fully offline, and the desktop's CSP blocks outside origins. Use system fonts.
@@ -174,7 +174,7 @@ export function createGenerator({ appsDir, runAgent }) {
   return { generate }
 }
 
-const FIX_SYSTEM_PROMPT = `You repair a broken app for Local Colony, a desktop shell that runs local apps in windows.
+const FIX_SYSTEM_PROMPT = `You repair a broken app for Local Reef, a desktop shell that runs local apps in windows.
 
 You are given the failure and the app's current files. Read what you need with read_file, then write corrected files with write_file.
 
@@ -184,7 +184,7 @@ How to work:
 - Read a file before you rewrite it. write_file replaces the whole file, so you must preserve everything you are not deliberately changing.
 - If the error is a missing dependency or a broken command, prefer fixing the app so it needs neither, rather than adding an install step.
 
-The same constraints as any Local Colony app still apply: no network requests, no CDNs, works offline, state in localStorage.
+The same constraints as any Local Reef app still apply: no network requests, no CDNs, works offline, state in localStorage.
 
 When the fix is complete, stop and say in one sentence what was wrong and what you changed. If you cannot determine the cause from the evidence, say so plainly instead of guessing at a rewrite.`
 

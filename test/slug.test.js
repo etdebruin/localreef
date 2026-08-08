@@ -45,7 +45,7 @@ test('slugify', async (t) => {
     ]
     for (const prompt of prompts) {
       const id = slugify(prompt)
-      assert.equal(parseHostname(`${id}.colony.localhost:1234`), id, `failed for: ${prompt}`)
+      assert.equal(parseHostname(`${id}.reef.localhost:1234`), id, `failed for: ${prompt}`)
     }
   })
 })
@@ -66,6 +66,6 @@ test('uniqueId', async (t) => {
 
   await t.test('the suffixed id is still routable', () => {
     const id = uniqueId('notes', ['notes'])
-    assert.equal(parseHostname(`${id}.colony.localhost:1234`), id)
+    assert.equal(parseHostname(`${id}.reef.localhost:1234`), id)
   })
 })

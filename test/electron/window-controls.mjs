@@ -335,7 +335,7 @@ app.whenReady().then(async () => {
   if (savePoint) await clickAt(savePoint)
   await wait(250)
 
-  const saved = await js(`window.colony.__savedSettings()`)
+  const saved = await js(`window.reef.__savedSettings()`)
   check(
     'saving sends the folder to the main process',
     saved?.appsFolder === '/tmp/other',

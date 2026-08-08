@@ -8,7 +8,7 @@ function subscribe(channel, callback) {
   return () => ipcRenderer.off(channel, handler)
 }
 
-contextBridge.exposeInMainWorld('colony', {
+contextBridge.exposeInMainWorld('reef', {
   listApps: () => ipcRenderer.invoke('apps:list'),
   launch: (id) => ipcRenderer.invoke('apps:launch', id),
   stop: (id) => ipcRenderer.invoke('apps:stop', id),

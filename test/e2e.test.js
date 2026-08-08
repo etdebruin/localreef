@@ -60,7 +60,7 @@ test('end to end', async (t) => {
 
   await gateway.listen(0)
   const port = gateway.port
-  const H = (id) => `${id}.colony.localhost:${port}`
+  const H = (id) => `${id}.reef.localhost:${port}`
 
   t.after(async () => {
     await supervisor.stopAll()

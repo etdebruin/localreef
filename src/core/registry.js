@@ -47,8 +47,8 @@ export async function readApp(dir) {
 
   let manifest = {}
   let manifestError
-  if (files.includes('colony.json')) {
-    const res = await readJson(path.join(dir, 'colony.json'))
+  if (files.includes('reef.json')) {
+    const res = await readJson(path.join(dir, 'reef.json'))
     manifest = res.value ?? {}
     manifestError = res.error
   }
@@ -65,14 +65,14 @@ export async function readApp(dir) {
 }
 
 /**
- * `requireManifest` narrows a scan to folders carrying a `colony.json`.
+ * `requireManifest` narrows a scan to folders carrying a `reef.json`.
  *
  * Curated directories — the bundled `apps/`, and `userData/apps/` — hold
  * nothing but apps, so inference alone is right there. A folder the user
  * points us at is different: `~/Code` is mostly libraries, forks and scratch
  * repos, and inferring over it would put sixty icons on the desktop and make
  * every one with a `dev` script spawnable. So discovery there is opt-in, and
- * `colony.json` is the marker. Its contents stay optional — an empty `{}`
+ * `reef.json` is the marker. Its contents stay optional — an empty `{}`
  * says "I am an app" and inference fills in the rest.
  */
 export async function scanApps(appsDir, { requireManifest = false } = {}) {
@@ -90,7 +90,7 @@ export async function scanApps(appsDir, { requireManifest = false } = {}) {
         await Promise.all(
           folders.map(async (e) => {
             try {
-              await fs.access(path.join(appsDir, e.name, 'colony.json'))
+              await fs.access(path.join(appsDir, e.name, 'reef.json'))
               return e
             } catch {
               return null

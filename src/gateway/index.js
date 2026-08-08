@@ -16,7 +16,7 @@ import { parseHostname } from '../core/routing.js'
 import { safeResolve, contentType } from './paths.js'
 import { parseCookies, authDecision, AUTH_COOKIE, AUTH_HEADER } from './auth.js'
 
-const RESERVED_PREFIX = '/__colony/'
+const RESERVED_PREFIX = '/__reef/'
 
 // Per RFC 9110 these describe a single hop and must not be forwarded.
 const HOP_BY_HOP = new Set([
@@ -152,7 +152,7 @@ export function createGateway({ token, lookup }) {
     }
 
     if (url.pathname.startsWith(RESERVED_PREFIX)) {
-      if (url.pathname === '/__colony/health') {
+      if (url.pathname === '/__reef/health') {
         return send(res, 200, 'ok', { 'content-type': 'application/json' })
       }
       return send(res, 404, 'Not found')
