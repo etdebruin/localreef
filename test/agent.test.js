@@ -4,7 +4,7 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 
-import { createAppTools, createGenerator } from '../src/main/agent.js'
+import { MODELS, createAppTools, createGenerator, outputConfig } from '../src/main/agent.js'
 
 async function tmpDir() {
   return fs.mkdtemp(path.join(os.tmpdir(), 'ld-agent-'))
@@ -186,5 +186,24 @@ test('createGenerator', async (t) => {
     assert.ok(phases.includes('done'), phases.join(','))
     assert.ok(events.some((e) => e.file === 'index.html'))
     await fs.rm(appsDir, { recursive: true, force: true })
+  })
+})
+
+test('model selection', async (t) => {
+  await t.test('each task names its model tier explicitly', () => {
+    // Generation and fixing both edit real files — a wrong edit is worse than
+    // a slow one, so both stay on Opus. Routing is a classification felt on
+    // every ⌘K keystroke, so it rides the fast tier.
+    assert.equal(MODELS.generate, 'claude-opus-5')
+    assert.equal(MODELS.fix, 'claude-opus-5')
+    assert.equal(MODELS.route, 'claude-haiku-4-5')
+  })
+
+  await t.test('effort is requested only from models that accept it', () => {
+    // Haiku 4.5 rejects output_config.effort with a 400 — a routing call that
+    // reuses the Opus request shape would fail before the model saw anything.
+    assert.deepEqual(outputConfig(MODELS.generate), { output_config: { effort: 'high' } })
+    assert.deepEqual(outputConfig(MODELS.fix), { output_config: { effort: 'high' } })
+    assert.deepEqual(outputConfig(MODELS.route), {})
   })
 })

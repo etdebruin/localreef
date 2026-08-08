@@ -15,7 +15,33 @@ import path from 'node:path'
 
 import { slugify, uniqueId } from '../core/slug.js'
 
-export const MODEL = 'claude-opus-5'
+/**
+ * One model per task, chosen deliberately rather than one constant for all.
+ *
+ * `generate` and `fix` both edit real files — for a linked app, the user's
+ * actual project — so they stay on Opus: a wrong edit costs more than a slow
+ * one. `route` is the v1.5 ⌘K intent classifier ("open an existing app, or
+ * build one?"); it is a tiny decision felt on every invocation, so it rides
+ * the fast tier. No call site uses it yet — it is here so the next one has to
+ * pick a tier instead of inheriting whatever generation uses.
+ */
+export const MODELS = {
+  generate: 'claude-opus-5',
+  fix: 'claude-opus-5',
+  route: 'claude-haiku-4-5',
+}
+
+/**
+ * The effort knob is Opus/Sonnet-only — Haiku 4.5 rejects `output_config.
+ * effort` with a 400, so a Haiku call reusing the Opus request shape would
+ * fail before the model saw anything. `high` rather than `xhigh`: the quality
+ * difference on an app this size does not pay for the extra latency in an
+ * interactive flow.
+ */
+export function outputConfig(model) {
+  if (String(model).startsWith('claude-haiku')) return {}
+  return { output_config: { effort: 'high' } }
+}
 
 const SYSTEM_PROMPT = `You generate small, self-contained apps for Local Reef, a desktop shell that runs local apps in windows.
 
@@ -254,7 +280,7 @@ export function createFixer({ runAgent }) {
  * The real model-backed runner. Kept separate from createGenerator so the
  * generation flow is testable without touching the network.
  */
-export function createClaudeRunner({ apiKey, model = MODEL } = {}) {
+export function createClaudeRunner({ apiKey, model = MODELS.generate } = {}) {
   return async function runAgent({ prompt, tools, onProgress = () => {}, system }) {
     const [{ default: Anthropic }, { betaTool }] = await Promise.all([
       import('@anthropic-ai/sdk'),
@@ -274,9 +300,7 @@ export function createClaudeRunner({ apiKey, model = MODEL } = {}) {
       // Caps thinking *and* output together. 32k is ample for a self-contained
       // app and keeps the request short enough to survive the connection.
       max_tokens: 32000,
-      // `high` rather than `xhigh`: the quality difference on an app this size
-      // does not pay for the extra latency in an interactive flow.
-      output_config: { effort: 'high' },
+      ...outputConfig(model),
       system: system ?? SYSTEM_PROMPT,
       messages: [{ role: 'user', content: prompt }],
       tools: tools.map((tool) =>

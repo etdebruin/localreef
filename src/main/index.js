@@ -22,7 +22,7 @@ import { allowsMedia, framePolicy } from '../core/policy.js'
 import { createSupervisor } from './supervisor.js'
 import { createGateway } from '../gateway/index.js'
 import { AUTH_PARAM, AUTH_HEADER } from '../gateway/auth.js'
-import { createGenerator, createFixer, createClaudeRunner } from './agent.js'
+import { MODELS, createGenerator, createFixer, createClaudeRunner } from './agent.js'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const projectRoot = path.resolve(here, '../..')
@@ -386,7 +386,7 @@ ipcMain.handle('apps:generate', async (_event, prompt) => {
 
   const generator = createGenerator({
     appsDir: generatedDir,
-    runAgent: createClaudeRunner({ apiKey }),
+    runAgent: createClaudeRunner({ apiKey, model: MODELS.generate }),
   })
 
   const result = await generator.generate({
@@ -406,7 +406,7 @@ ipcMain.handle('apps:fix', async (_event, id) => {
   if (!apiKey) return { ok: false, error: NO_KEY }
 
   const state = supervisor.get(id)
-  const fixer = createFixer({ runAgent: createClaudeRunner({ apiKey }) })
+  const fixer = createFixer({ runAgent: createClaudeRunner({ apiKey, model: MODELS.fix }) })
 
   const result = await fixer.fix({
     id,

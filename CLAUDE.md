@@ -182,8 +182,12 @@ Do not delete either suite as duplication.
 
 ## Agent generation
 
-`claude-opus-5`, `max_tokens: 32000`, `output_config: { effort: 'high' }`,
-streaming required. Tuning that was arrived at empirically:
+Models are chosen per task in `MODELS` (`agent.js`): generation and fixing run
+`claude-opus-5` — both edit real files, so wrong costs more than slow — and the
+future ⌘K intent router is pinned to `claude-haiku-4-5`. Haiku rejects
+`output_config.effort`, so the effort setting is derived from the model
+(`outputConfig()`), not hardcoded. `max_tokens: 32000`, `effort: 'high'` on
+Opus, streaming required. Tuning that was arrived at empirically:
 
 - 64k tokens at `xhigh` effort made the request long enough that the socket died
   with undici `terminated`. `max_tokens` caps thinking *and* output together.
