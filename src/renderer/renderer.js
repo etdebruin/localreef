@@ -7,6 +7,8 @@
  * click-catcher, since a click landing inside an iframe never reaches us.
  */
 
+import { greetingFor } from '../core/greeting.js'
+
 const dockAppsEl = document.getElementById('dock-apps')
 const emptyEl = document.getElementById('empty')
 const windowsEl = document.getElementById('windows')
@@ -112,6 +114,62 @@ function syncDock() {
   }
 }
 
+// -------------------------------------------------------------- session
+
+/**
+ * Keep the on-disk session matching the screen.
+ *
+ * Everything that moves a window funnels through here: open, close, minimize,
+ * restore, focus, and the end of every drag or resize. Debounced because a
+ * drag emits geometry continuously, and the arrangement only needs to be
+ * durable, not live. The array order is the z-order, bottom to top, so
+ * restoring by opening in order reproduces the stacking.
+ */
+let persistTimer = null
+
+function persistSession() {
+  clearTimeout(persistTimer)
+  persistTimer = setTimeout(() => {
+    const windows = [...openWindows.entries()]
+      .sort((a, b) => Number(a[1].el.style.zIndex) - Number(b[1].el.style.zIndex))
+      .map(([id, win]) => ({
+        id,
+        // From the inline styles, not offset*: a minimized window is
+        // display:none, where every offset reads 0 — recording that would
+        // wipe its real geometry the moment it was parked.
+        left: parseInt(win.el.style.left, 10),
+        top: parseInt(win.el.style.top, 10),
+        width: parseInt(win.el.style.width, 10),
+        height: parseInt(win.el.style.height, 10),
+        minimized: win.minimized,
+      }))
+    window.reef.saveSession(windows)
+  }, 300)
+}
+
+/** Reopen everything the last session had on screen, where it had it. */
+async function restoreSession() {
+  const [session, apps] = await Promise.all([window.reef.getSession(), window.reef.listApps()])
+  const byId = new Map(apps.map((a) => [a.id, a]))
+
+  let front = null
+  for (const saved of session?.windows ?? []) {
+    const app = byId.get(saved.id)
+    if (!app || app.status === 'broken' || openWindows.has(saved.id)) continue
+
+    // Not awaited: window creation is synchronous, so stacking order is
+    // already right, and one slow server must not hold up the rest.
+    openApp(app, saved)
+    if (saved.minimized) minimizeWindow(saved.id)
+    else front = saved.id
+  }
+
+  // Opening a minimized window last would otherwise leave nothing marked
+  // focused — every visible window looking inactive is the bug the focus
+  // model exists to prevent.
+  if (front) focusWindow(front)
+}
+
 // -------------------------------------------------------------- windows
 
 /**
@@ -130,6 +188,7 @@ function focusWindow(id) {
   for (const [otherId, other] of openWindows) {
     other.el.classList.toggle('focused', otherId === id)
   }
+  persistSession()
 }
 
 function closeWindow(id) {
@@ -151,6 +210,7 @@ function closeWindow(id) {
   if (next) focusWindow(next[0])
 
   syncDock()
+  persistSession()
 }
 
 /**
@@ -167,6 +227,7 @@ function minimizeWindow(id) {
   win.el.hidden = true
   win.el.classList.remove('focused')
   syncDock()
+  persistSession()
 }
 
 function restoreWindow(id) {
@@ -176,9 +237,11 @@ function restoreWindow(id) {
   win.el.hidden = false
   focusWindow(id)
   syncDock()
+  persistSession()
 }
 
-function makeWindow(app) {
+/** `at` is a saved geometry from a previous session; without it, cascade. */
+function makeWindow(app, at) {
   const offset = (cascade++ % 6) * 28
 
   // The stage holds whatever the window shows — spinner, crash panel, or the
@@ -215,10 +278,12 @@ function makeWindow(app) {
   const resize = h('div', { className: 'resize' })
   const el = h('div', { className: 'window' }, titlebar, body, resize)
 
-  el.style.left = `${90 + offset}px`
-  el.style.top = `${70 + offset}px`
-  el.style.width = '820px'
-  el.style.height = '560px'
+  // Clamped the same way a drag is, so a session saved on a bigger screen
+  // still leaves every titlebar reachable.
+  el.style.left = `${Math.max(0, at?.left ?? 90 + offset)}px`
+  el.style.top = `${Math.max(34, at?.top ?? 70 + offset)}px`
+  el.style.width = `${Math.max(320, at?.width ?? 820)}px`
+  el.style.height = `${Math.max(200, at?.height ?? 560)}px`
   el.style.zIndex = String(++topZ)
 
   el.addEventListener('mousedown', () => focusWindow(app.id), true)
@@ -269,6 +334,8 @@ function dragWith(handle, onMove, getStart) {
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', end)
       window.removeEventListener('pointercancel', end)
+      // The gesture settled somewhere; make that somewhere durable.
+      persistSession()
     }
 
     window.addEventListener('pointermove', move)
@@ -362,10 +429,10 @@ async function reopen(id) {
   if (fresh) openApp(fresh)
 }
 
-async function openApp(app) {
+async function openApp(app, at) {
   if (openWindows.has(app.id)) return focusWindow(app.id)
 
-  const win = makeWindow(app)
+  const win = makeWindow(app, at)
   openWindows.set(app.id, { ...win, app, minimized: false })
 
   // After the map entry exists, not inside makeWindow: focusWindow walks
@@ -747,6 +814,7 @@ function swatchFor(background) {
 // ------------------------------------------------------------- settings
 
 const settingsEl = document.getElementById('settings')
+const ownerNameEl = document.getElementById('owner-name')
 const backgroundsEl = document.getElementById('backgrounds')
 const appsFolderEl = document.getElementById('apps-folder')
 const appsFolderStatusEl = document.getElementById('apps-folder-status')
@@ -794,6 +862,7 @@ async function openSettings() {
   const settings = await window.reef.getSettings()
 
   renderBackgroundPicker(settings.backgrounds ?? [], settings.background?.id ?? null)
+  ownerNameEl.value = settings.ownerName ?? ''
   appsFolderEl.value = settings.appsFolder ?? ''
 
   // The key itself never leaves the main process, so the field starts empty
@@ -840,7 +909,11 @@ const closeSettings = async () => {
 }
 
 async function saveSettings() {
-  const patch = { appsFolder: appsFolderEl.value, backgroundId: pendingBackgroundId }
+  const patch = {
+    appsFolder: appsFolderEl.value,
+    backgroundId: pendingBackgroundId,
+    ownerName: ownerNameEl.value,
+  }
 
   // An untouched field must not wipe a saved key, so only send what was typed.
   if (apiKeyEl.value.trim()) patch.anthropicApiKey = apiKeyEl.value
@@ -878,6 +951,90 @@ settingsEl.addEventListener('keydown', (event) => {
   }
 })
 
+// --------------------------------------------------------------- hello
+
+/**
+ * The startup hello.
+ *
+ * Never blocks. The greeting is pure text floating over the reef —
+ * pointer-events: none, so it cannot intercept a single click — and the name
+ * prompt is a small card with no scrim behind it and no focus steal: the
+ * desktop stays fully usable while it waits, and "maybe later" costs nothing
+ * (it just asks again next launch).
+ */
+function showHello(children, { interactive = false } = {}) {
+  document.getElementById('hello')?.remove()
+  const el = h('div', { id: 'hello', className: interactive ? 'ask' : '' }, ...children)
+  document.body.append(el)
+  return el
+}
+
+function fadeHello(el, after = 7000) {
+  setTimeout(() => {
+    el.classList.add('leaving')
+    setTimeout(() => el.remove(), 900)
+  }, after)
+}
+
+const helloLines = ({ title, sub }) => [
+  h('div', { className: 'hello-title', textContent: title }),
+  h('div', { className: 'hello-sub', textContent: sub }),
+]
+
+function greet(name) {
+  fadeHello(showHello(helloLines(greetingFor(name, new Date().getHours()))))
+}
+
+function askForName() {
+  const input = h('input', {
+    className: 'hello-input',
+    placeholder: 'Your name',
+    autocomplete: 'off',
+    spellcheck: false,
+    maxLength: 60,
+  })
+  const save = h('button', { className: 'hello-save', type: 'submit', textContent: 'Say hello' })
+  const later = h('button', { className: 'hello-later', type: 'button', textContent: 'maybe later' })
+  const form = h('form', { className: 'hello-form' }, input, save)
+
+  const el = showHello(
+    [
+      h('div', { className: 'hello-title', textContent: 'Welcome to your reef' }),
+      h('div', {
+        className: 'hello-sub',
+        textContent: 'I don’t think we’ve met — what should I call you?',
+      }),
+      form,
+      later,
+    ],
+    { interactive: true },
+  )
+
+  later.addEventListener('click', () => fadeHello(el, 0))
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault()
+    const name = input.value.trim()
+    if (!name || input.disabled) return
+
+    input.disabled = true
+    save.disabled = true
+    const result = await window.reef.updateSettings({ ownerName: name })
+    if (!result.ok) {
+      input.disabled = false
+      save.disabled = false
+      return
+    }
+
+    // Same spot, new voice: the card becomes the greeting it could not give.
+    el.classList.remove('ask')
+    el.replaceChildren(
+      ...helloLines({ title: `Lovely to meet you, ${name}`, sub: 'The reef is yours.' }),
+    )
+    fadeHello(el)
+  })
+}
+
 // --------------------------------------------------------------- wiring
 
 refreshEl.addEventListener('click', renderDock)
@@ -897,6 +1054,15 @@ window.reef.onState(({ id, status, error, logs }) => {
 
 renderDock()
 
+// Put back whatever the last session had on screen. Runs alongside renderDock
+// on purpose — neither waits on the other.
+restoreSession()
+
 // Paint the saved wallpaper. The CSS default covers the frame before this
-// resolves, so there is no flash of bare canvas.
-window.reef.getSettings().then((settings) => applyBackground(settings.background))
+// resolves, so there is no flash of bare canvas. Then say hello — by name if
+// we know it, otherwise by asking for one.
+window.reef.getSettings().then((settings) => {
+  applyBackground(settings.background)
+  if (settings.ownerName) greet(settings.ownerName)
+  else askForName()
+})

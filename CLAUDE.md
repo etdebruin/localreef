@@ -6,10 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 npm start                  # launch the desktop (Electron)
-npm test                   # 276 unit + integration tests
+npm test                   # 322 unit + integration tests
 npm run lint
 npm run test:electron      # iframe auth, needs a real Electron GUI
-npm run test:electron:ui   # dock/window/settings + edit pane, real Chromium input
+npm run test:electron:ui   # dock/window/settings, edit pane, hello, session restore
 npm run test:electron:ws   # browser-initiated WebSocket from an app iframe
 npm run test:electron:media # mic/camera Permissions Policy on an app iframe
 npm run test:vite          # real Vite through the gateway, incl. live HMR
@@ -170,6 +170,18 @@ thinking blocks are never replayed across turns; the files on disk are the
 state and each turn's prompt carries a fresh listing. History dies with the
 window — `apps:stop` is the single teardown hook (the renderer calls it for
 every window close, static apps included).
+
+**A minimized window reads `offset*` as 0.** It is `display: none`, where every
+offset property is 0 — persisting those would wipe the window's real geometry
+the moment it was parked. Session persistence reads the inline `style.left/top/
+width/height` instead, which survive being hidden.
+`test/electron/session-restore.mjs` guards it.
+
+**On macOS, closing the shell window must not shut the shell down.** The red
+dot hides; gateway and supervisor stay up, and the renderer rebuilds the
+desktop from `userData/session.json` on the next window. `window-all-closed`
+used to call `shutdown()`, which left reactivation pointing at a dead gateway.
+Quit (`before-quit`) is still the real teardown.
 
 **Control characters do not survive being written into source.** A literal ESC
 or NUL gets mangled. Build them with `String.fromCharCode` (see

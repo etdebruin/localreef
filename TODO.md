@@ -68,8 +68,6 @@ to be every app's WebSocket failing.)*
 
 - **`keepAlive` is parsed but not enforced.** Closing a window stops a server app
   immediately; the warm-hold TTL in the manifest does nothing.
-- **Window layout is not persisted.** Position, size and minimized state are lost
-  on relaunch, though the design calls for storing them.
 
 ---
 

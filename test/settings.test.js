@@ -15,7 +15,21 @@ test('createSettingsStore', async (t) => {
     const dir = await scratch()
     const store = createSettingsStore(path.join(dir, 'settings.json'))
 
-    assert.deepEqual(await store.read(), { appsFolder: null, anthropicApiKey: null, backgroundId: null })
+    assert.deepEqual(await store.read(), {
+      appsFolder: null,
+      anthropicApiKey: null,
+      backgroundId: null,
+      ownerName: null,
+    })
+    await fs.rm(dir, { recursive: true, force: true })
+  })
+
+  await t.test('persists the owner name for the startup hello', async () => {
+    const dir = await scratch()
+    const file = path.join(dir, 'settings.json')
+
+    await createSettingsStore(file).update({ ownerName: '  Etienne ' })
+    assert.equal((await createSettingsStore(file).read()).ownerName, 'Etienne')
     await fs.rm(dir, { recursive: true, force: true })
   })
 
@@ -78,6 +92,7 @@ test('createSettingsStore', async (t) => {
       appsFolder: null,
       anthropicApiKey: null,
       backgroundId: null,
+      ownerName: null,
     })
     await fs.rm(dir, { recursive: true, force: true })
   })

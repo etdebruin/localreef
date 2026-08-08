@@ -19,6 +19,9 @@ contextBridge.exposeInMainWorld('reef', {
   link: (paths) => ipcRenderer.invoke('apps:link', paths),
   unlink: (dir) => ipcRenderer.invoke('apps:unlink', dir),
 
+  getSession: () => ipcRenderer.invoke('session:get'),
+  saveSession: (windows) => ipcRenderer.invoke('session:save', windows),
+
   getSettings: () => ipcRenderer.invoke('settings:get'),
   updateSettings: (patch) => ipcRenderer.invoke('settings:update', patch),
   chooseFolder: () => ipcRenderer.invoke('settings:chooseFolder'),

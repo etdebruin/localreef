@@ -7,6 +7,19 @@ const { contextBridge } = require('electron')
 let savedSettings = null
 let hasApiKey = true
 
+// Scenario knobs arrive as query params on the page URL, because module state
+// here resets on every reload — a harness that wants a different starting
+// state loads the page again with different params.
+//   owner:   '' means "no name saved yet"; absent means the default name.
+//   session: JSON for getSession, so a harness can hand the renderer a
+//            previous desktop to restore.
+const params = new URLSearchParams(location.search)
+let ownerName = params.has('owner') ? params.get('owner') || null : 'Etienne'
+const session = params.has('session')
+  ? JSON.parse(params.get('session'))
+  : { main: null, windows: [] }
+let savedSession = null
+
 // Mirrors src/core/backgrounds.js closely enough to exercise both kinds.
 const BACKGROUNDS = [
   {
@@ -91,6 +104,7 @@ contextBridge.exposeInMainWorld('reef', {
     background: BACKGROUNDS[0],
     backgrounds: BACKGROUNDS,
     appsFolder: '/tmp/projects',
+    ownerName,
     // The real bridge never returns the key itself, only whether one exists.
     anthropicApiKey: null,
     hasApiKey,
@@ -101,8 +115,16 @@ contextBridge.exposeInMainWorld('reef', {
     savedSettings = patch
     // Mirrors main: saving a key means there is now a key.
     if (patch && patch.anthropicApiKey) hasApiKey = true
+    if (patch && 'ownerName' in patch) ownerName = patch.ownerName || null
     return { ok: true, apps: [] }
   },
+
+  getSession: async () => session,
+  saveSession: async (windows) => {
+    savedSession = windows
+    return { ok: true }
+  },
+  __savedSession: () => savedSession,
   __setHasApiKey: (value) => {
     hasApiKey = value
   },

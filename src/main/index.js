@@ -6,7 +6,7 @@
  * renderer a URL per app.
  */
 
-import { app, BrowserWindow, dialog, ipcMain, session, shell, systemPreferences } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, screen, session, shell, systemPreferences } from 'electron'
 import crypto from 'node:crypto'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -16,6 +16,7 @@ import fs from 'node:fs/promises'
 import { scanApps, readApp } from '../core/registry.js'
 import { createLinkStore } from '../core/links.js'
 import { createSettingsStore, resolveApiKey } from '../core/settings.js'
+import { createSessionStore } from '../core/session.js'
 import { readIconImage, isImageIcon, initialsFor, hueFor } from '../core/icon.js'
 import { BACKGROUNDS, resolveBackground } from '../core/backgrounds.js'
 import { allowsMedia, framePolicy } from '../core/policy.js'
@@ -44,6 +45,7 @@ const NO_KEY = 'No Anthropic API key. Add one in Settings, or set ANTHROPIC_API_
 
 let links = null
 let settings = null
+let sessionStore = null
 let mainWindow = null
 let gateway = null
 let apps = new Map()
@@ -172,9 +174,26 @@ function serialise(record) {
 }
 
 async function createWindow() {
+  // Reopening the shell puts it back exactly where it was — size and position
+  // both. Position is only reused while it still lands on a live display; a
+  // saved x/y from an unplugged monitor would otherwise open the window
+  // somewhere no one can see it.
+  const saved = (await sessionStore.read()).main
+  const visible =
+    saved &&
+    screen.getAllDisplays().some(({ workArea }) => {
+      return (
+        saved.x < workArea.x + workArea.width &&
+        saved.x + saved.width > workArea.x &&
+        saved.y < workArea.y + workArea.height &&
+        saved.y + saved.height > workArea.y
+      )
+    })
+
   mainWindow = new BrowserWindow({
-    width: 1280,
-    height: 820,
+    width: saved?.width ?? 1280,
+    height: saved?.height ?? 820,
+    ...(visible ? { x: saved.x, y: saved.y } : {}),
     minWidth: 900,
     minHeight: 600,
     title: 'Local Reef',
@@ -209,8 +228,24 @@ async function createWindow() {
     console.error('[renderer] process gone:', details.reason)
   })
 
+  // Track bounds as they change rather than trying to catch the close: a
+  // debounced save is always already on disk when the window goes away, so
+  // there is no write racing the teardown.
+  let boundsTimer = null
+  const saveBounds = () => {
+    clearTimeout(boundsTimer)
+    boundsTimer = setTimeout(() => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        sessionStore.update({ main: mainWindow.getBounds() })
+      }
+    }, 400)
+  }
+  mainWindow.on('resize', saveBounds)
+  mainWindow.on('move', saveBounds)
+
   await mainWindow.loadFile(path.join(projectRoot, 'src/renderer/index.html'))
   mainWindow.on('closed', () => {
+    clearTimeout(boundsTimer)
     mainWindow = null
   })
 }
@@ -218,6 +253,7 @@ async function createWindow() {
 app.whenReady().then(async () => {
   links = createLinkStore(path.join(app.getPath('userData'), 'links.json'))
   settings = createSettingsStore(path.join(app.getPath('userData'), 'settings.json'))
+  sessionStore = createSessionStore(path.join(app.getPath('userData'), 'session.json'))
 
   // Authenticate framed apps by header rather than cookie. An app iframe is a
   // cross-site context relative to the file:// renderer, so a SameSite=Lax
@@ -373,6 +409,16 @@ ipcMain.handle('apps:unlink', async (_event, dir) => {
   return { ok: true }
 })
 
+// The renderer owns app-window geometry, so it reports the whole arrangement
+// (in z-order) whenever it changes; main just keeps the latest on disk. The
+// read side hands it back on startup so the desktop reassembles itself.
+ipcMain.handle('session:get', async () => sessionStore.read())
+
+ipcMain.handle('session:save', async (_event, windows) => {
+  await sessionStore.update({ windows: windows ?? [] })
+  return { ok: true }
+})
+
 ipcMain.handle('settings:get', async () => {
   const current = await settings.read()
   return {
@@ -524,9 +570,17 @@ async function shutdown() {
   await gateway?.close()
 }
 
+// On macOS the red dot hides the shell, it does not end the session: gateway
+// and supervisor stay up, so clicking the Dock icon reassembles the desktop —
+// same window bounds, same apps, same positions — with every server app's
+// in-memory state intact. Tearing it all down here was why a reopened window
+// used to come back to a dead gateway. Everywhere else, closing the window is
+// quitting, and before-quit still shuts everything down.
 app.on('window-all-closed', async () => {
-  await shutdown()
-  if (process.platform !== 'darwin') app.quit()
+  if (process.platform !== 'darwin') {
+    await shutdown()
+    app.quit()
+  }
 })
 
 app.on('before-quit', shutdown)

@@ -222,8 +222,14 @@ registered ──▶ resolving ──▶ starting ──▶ ready ──▶ idle
 
 ## 6. Window management
 
-The desktop renderer owns layout. Each window is `{ id, appId, x, y, w, h, z, state, title }`
-persisted to SQLite, so your desk looks the way you left it.
+The desktop renderer owns layout. Each open window's geometry, minimized state
+and stacking order is persisted to `userData/session.json` (the SQLite ambition
+below never earned its complexity — a JSON file in the settings/links mould was
+enough), so your desk looks the way you left it: closing the shell and reopening
+it restores the main window's bounds and reopens every app window where it was.
+On macOS the red dot only hides the shell — gateway and supervisor stay up, so
+reopening from the Dock reassembles the desktop with server apps' in-memory
+state intact. Quit still tears everything down.
 
 Three problems worth naming up front, because they're where naïve implementations fall
 over:
