@@ -136,20 +136,38 @@
       .dock-app:hover { transform: scale(1.18) translateY(-2px); }
       .dock-app:active { transform: scale(1.04); }
 
-      /* --- App tiles -------------------------------------------------------
-         Always square, always the same corner and shadow. Only the contents
-         vary — supplied art, a supplied emoji, or a tile tinted from the app
-         id. Holding the geometry fixed is what stops a dock of mixed apps
-         reading as a pile of stickers (DESIGN.md §12). */
+      /* --- App bubbles ----------------------------------------------------
+         These were squares, on the reasoning that fixed geometry is what makes
+         a mixed set read as one family. That still holds — it is just that the
+         shared geometry should be a sphere. Sitting beside the bubble controls,
+         squares read as a different, older idea.
+
+         The three content modes are unchanged: supplied art, a supplied emoji
+         on a light tinted ground, or a hue-tinted ground with initials. Only
+         the shape and the glass on top are new. */
       .tile {
         position: relative;
-        width: 48px; height: 48px;
-        border-radius: 12px;
+        width: 52px; height: 52px;
+        border-radius: 50%;
         display: grid; place-items: center;
         overflow: hidden;
-        /* Contact shadow only. The tile sits on a dark translucent dock, so it
-           needs to look lifted, not outlined — a border reads as a button. */
-        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+        box-shadow: 0 3px 11px rgba(0, 0, 0, 0.38);
+      }
+
+      /* The glass itself, over whatever the tile contains: tight specular high
+         and left, bounce light opposite, bright rim where the surface turns
+         away. Same anatomy as the control bubbles so the two read as one
+         material. */
+      .tile::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        pointer-events: none;
+        background:
+          radial-gradient(circle at 32% 25%, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.4) 9%, transparent 30%),
+          radial-gradient(circle at 68% 80%, rgba(214,248,255,0.34) 0%, transparent 32%),
+          radial-gradient(circle at 50% 50%, transparent 58%, rgba(255,255,255,0.34) 88%, rgba(255,255,255,0.66) 97%, rgba(255,255,255,0.3) 100%);
       }
 
       .tile--image img {
@@ -176,7 +194,7 @@
           inset 0 0 0 1px rgba(0, 0, 0, 0.06);
       }
       .tile-glyph {
-        font-size: 26px;
+        font-size: 27px;
         line-height: 1;
         /* Emoji render with their own baseline metrics; nudge to true centre. */
         transform: translateY(1px);
@@ -196,14 +214,14 @@
           inset 0 1px 0 rgba(255, 255, 255, 0.18);
       }
       .tile-initials {
-        font-size: 19px;
+        font-size: 20px;
         font-weight: 560;
         letter-spacing: 0.01em;
         color: oklch(0.97 0.025 var(--hue));
       }
 
       .dock-app.broken .tile {
-        box-shadow: 0 2px 5px rgba(0,0,0,0.4), inset 0 0 0 1.5px var(--danger);
+        box-shadow: 0 3px 11px rgba(0,0,0,0.38), 0 0 0 2px var(--danger);
       }
 
       /* Titlebar copy of the same tile, so an app looks like itself in both
@@ -211,7 +229,7 @@
       .tile-sm {
         position: relative;
         width: 17px; height: 17px;
-        border-radius: 5px;
+        border-radius: 50%;
         display: grid; place-items: center;
         overflow: hidden;
         flex: none;

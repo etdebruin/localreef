@@ -101,17 +101,22 @@ app.whenReady().then(async () => {
     JSON.stringify(wallpaper),
   )
 
-  // --- icons are square, uniform, and mode-appropriate ---
+  // --- icons are circular bubbles, uniform, and mode-appropriate ---
   const tiles = await js(`(() => [...document.querySelectorAll('.dock-app .tile')].map((el) => {
     const r = el.getBoundingClientRect()
-    return { w: Math.round(r.width), h: Math.round(r.height), cls: el.className }
+    return {
+      w: Math.round(r.width),
+      h: Math.round(r.height),
+      cls: el.className,
+      radius: getComputedStyle(el).borderTopLeftRadius,
+    }
   }))()`)
 
   check('every app has a tile', Array.isArray(tiles) && tiles.length === 2, JSON.stringify(tiles))
   check(
-    'every tile is square',
-    tiles.length > 0 && tiles.every((t) => t.w === t.h && t.w > 0),
-    JSON.stringify(tiles.map((t) => `${t.w}x${t.h}`)),
+    'every tile is a circle',
+    tiles.length > 0 && tiles.every((t) => t.w === t.h && t.w > 0 && t.radius === '50%'),
+    JSON.stringify(tiles.map((t) => `${t.w}x${t.h} r=${t.radius}`)),
   )
   check(
     'every tile is the same size',
@@ -172,7 +177,7 @@ app.whenReady().then(async () => {
   })()`)
   check('the titlebar shows a tile', Boolean(titleTile), JSON.stringify(titleTile))
   check(
-    'the titlebar tile is square',
+    'the titlebar tile is a circle',
     titleTile && titleTile.w === titleTile.h && titleTile.w > 0,
     `${titleTile?.w}x${titleTile?.h}`,
   )

@@ -162,14 +162,18 @@ the lockfile.
 
 ### Icons: one geometry, three contents
 
-An icon is always a square tile — same size, same corner, same shadow. Only what
-sits inside varies:
+An icon is always a circular bubble — same size, same glass, same shadow. Only
+what sits inside varies:
 
 | Declared | Renders as |
 |---|---|
 | a file in the app folder (`icon.png`, `logo.svg`) | the art, edge to edge |
-| an emoji | the emoji on a **neutral** tile |
-| nothing | a tile tinted from the app id, carrying the name's initials |
+| an emoji | the emoji on a light, faintly hue-tinted ground |
+| nothing | a ground tinted from the app id, carrying the name's initials |
+
+These were squares first, and the shape was the wrong call — beside the bubble
+controls in the dock, squares read as a different and older idea. The principle
+survived the change: hold the geometry fixed and vary only the contents.
 
 Holding the geometry fixed is the whole trick. The original worry — that a desktop
 of emoji reads like a Slack channel list — was really about *inconsistency*: emoji,
