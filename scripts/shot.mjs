@@ -56,6 +56,15 @@ const STATES = {
       return document.querySelectorAll('.window[hidden]').length
     })()`,
   },
+  linked: {
+    description: 'A linked project (third dock app) running',
+    setup: `(async () => {
+      const apps = [...document.querySelectorAll('.dock-app')]
+      apps[apps.length - 1]?.click()
+      await new Promise((r) => setTimeout(r, 9000))
+      return document.querySelectorAll('.window').length
+    })()`,
+  },
   settings: {
     description: 'Settings sheet',
     setup: `(async () => {

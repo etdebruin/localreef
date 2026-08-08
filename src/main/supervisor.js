@@ -14,6 +14,8 @@ import { spawn, execFile } from 'node:child_process'
 import net from 'node:net'
 import os from 'node:os'
 
+import { PATH_MARKER, parseShellPath, withFallbacks } from '../core/shell-path.js'
+
 import { sniffPort } from '../core/probe.js'
 
 const MAX_LOG_LINES = 200
@@ -23,8 +25,21 @@ const STOP_GRACE_MS = 2000
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 /**
- * A GUI-launched Electron app does not inherit the shell's PATH, so `node` and
- * `npm` are simply missing. Ask a login shell once and cache the answer.
+ * A GUI-launched Electron app does not inherit the shell's PATH, so `node`,
+ * `uv` and friends are simply missing. Ask a login shell once and cache it.
+ *
+ * Two things this has to survive, both of which broke a real launch:
+ *
+ * The shell's stdout is not ours alone. An interactive zsh on macOS prints
+ * "Restored session: ..." from Terminal's session-restore before anything we
+ * asked for, so the reply is marked and only what follows the marker is read
+ * as PATH. Trimming the whole blob turned the leading entries into garbage.
+ *
+ * And an interactive rc file can be slow — pyenv, nvm, cargo, foundry all
+ * add up, and this was already 1.3s on a warm machine. The old 3s timeout
+ * fell back to the bare GUI PATH, which is `/usr/bin:/bin` and starts almost
+ * nothing. The window is wider now, and the fallback carries the usual
+ * install locations so a timeout degrades instead of failing outright.
  */
 let cachedPath
 async function userPath() {
@@ -32,10 +47,22 @@ async function userPath() {
 
   cachedPath = await new Promise((resolve) => {
     const shell = process.env.SHELL || '/bin/zsh'
-    const child = execFile(shell, ['-ilc', 'echo -n "$PATH"'], { timeout: 3000 }, (err, stdout) => {
-      resolve(err || !stdout?.trim() ? process.env.PATH : stdout.trim())
-    })
-    child.on('error', () => resolve(process.env.PATH))
+    const child = execFile(
+      shell,
+      ['-ilc', `printf %s "${PATH_MARKER}$PATH"`],
+      { timeout: 10000 },
+      (err, stdout) => {
+        const parsed = parseShellPath(stdout)
+        if (!parsed) {
+          console.error(
+            `[supervisor] could not read PATH from ${shell}` +
+              `${err ? ` (${err.message})` : ''}; falling back to defaults`,
+          )
+        }
+        resolve(withFallbacks(parsed ?? process.env.PATH))
+      },
+    )
+    child.on('error', () => resolve(withFallbacks(process.env.PATH)))
   })
 
   return cachedPath
