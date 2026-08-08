@@ -25,9 +25,9 @@ import { createGenerator, createFixer, createClaudeRunner } from './agent.js'
 const here = path.dirname(fileURLToPath(import.meta.url))
 const projectRoot = path.resolve(here, '../..')
 
-// Guarantee *.desktop.localhost resolves to loopback rather than trusting the
+// Guarantee *.colony.localhost resolves to loopback rather than trusting the
 // system resolver to do the RFC 6761 thing.
-app.commandLine.appendSwitch('host-resolver-rules', 'MAP *.desktop.localhost 127.0.0.1')
+app.commandLine.appendSwitch('host-resolver-rules', 'MAP *.colony.localhost 127.0.0.1')
 
 const TOKEN = crypto.randomBytes(24).toString('hex')
 
@@ -54,7 +54,7 @@ async function refreshApps() {
   const curated = await Promise.all(appDirectories().map((dir) => scanApps(dir)))
 
   // The user's own projects folder. Discovery here is opt-in — only folders
-  // carrying a desktop.json — because it is a working directory, not a
+  // carrying a colony.json — because it is a working directory, not a
   // curated one. See scanApps.
   const { appsFolder } = await settings.read()
   const discovered = appsFolder ? await scanApps(appsFolder, { requireManifest: true }) : []
@@ -111,7 +111,7 @@ function tileFor(record) {
 }
 
 function urlFor(id, { withToken = false } = {}) {
-  const base = `http://${id}.desktop.localhost:${gateway.port}/`
+  const base = `http://${id}.colony.localhost:${gateway.port}/`
   return withToken ? `${base}?${AUTH_PARAM}=${TOKEN}` : base
 }
 
@@ -138,7 +138,7 @@ async function createWindow() {
     height: 820,
     minWidth: 900,
     minHeight: 600,
-    title: 'Local Desktop',
+    title: 'Local Colony',
     backgroundColor: '#11131a',
     titleBarStyle: 'hiddenInset',
     webPreferences: {
@@ -194,9 +194,9 @@ app.whenReady().then(async () => {
   session.defaultSession.webRequest.onBeforeSendHeaders(
     {
       urls: [
-        '*://*.desktop.localhost/*',
-        'ws://*.desktop.localhost/*',
-        'wss://*.desktop.localhost/*',
+        '*://*.colony.localhost/*',
+        'ws://*.colony.localhost/*',
+        'wss://*.colony.localhost/*',
       ],
     },
     (details, callback) => {

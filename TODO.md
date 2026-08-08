@@ -11,12 +11,12 @@ the ledger.
 ## Shipped
 
 - **M1 — the mechanic.** Gateway, hostname routing, registry, supervisor.
-- **M2 — the desktop.** Canvas, icons, draggable/resizable windows, dock.
+- **M2 — the canvas.** Canvas, icons, draggable/resizable windows, dock.
 - **M3 — supervision.** Lifecycle, readiness detection, log capture, crash panel
   with real stderr.
 - **M4 — ⌘K.** Generation from a description, plus Fix with AI on the crash panel.
 - **Linked apps.** Any folder on disk, run in place.
-- **Settings.** A scanned projects folder (opt-in per app via `desktop.json`) and
+- **Settings.** A scanned projects folder (opt-in per app via `colony.json`) and
   an API key stored in `userData`, so ⌘K works launched from Finder or the Dock.
 - **Dock and window controls.** Dock replaces canvas icons; minimize parks a
   window without stopping the app, × still quits it.
@@ -79,8 +79,8 @@ to be every app's WebSocket failing.)*
 
 - **M5 — edit live.** Side-by-side app + chat, folder watch, hot reload. The
   generator and fixer already exist; this is the loop around them.
-- **The `desktop.*` SDK bridge.** `desktop.storage`, `desktop.ai`, `desktop.window`
-  — designed in DESIGN.md §7, no code yet. `desktop.ai` is the notable one: it
+- **The `colony.*` SDK bridge.** `colony.storage`, `colony.ai`, `colony.window`
+  — designed in DESIGN.md §7, no code yet. `colony.ai` is the notable one: it
   lets generated apps call a model without the user pasting a key into each app.
 - **Pop-out to native windows.** Canvas-first was chosen with an escape hatch for
   multi-monitor; the hatch does not exist.
@@ -93,7 +93,7 @@ to be every app's WebSocket failing.)*
 
 - **Machine-local state is unbacked-up.** `links.json` and generated apps live in
   `userData/`, outside the repo — so a clone does not restore your desktop.
-  Linked projects already carry their own `desktop.json`; the list itself does not.
+  Linked projects already carry their own `colony.json`; the list itself does not.
 - **`type: "node"` is a legacy alias** normalised in `manifest.js`. Harmless, but
   it can go once nothing depends on it.
 - **`npm test` is 180 tests and growing.** Three suites must be run separately

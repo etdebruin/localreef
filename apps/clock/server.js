@@ -1,7 +1,7 @@
 /**
  * A zero-dependency server app.
  *
- * Exists to prove the two things a static app cannot: that Local Desktop
+ * Exists to prove the two things a static app cannot: that Local Colony
  * spawns and proxies a real server, and that WebSocket upgrades survive the
  * gateway. The WebSocket is hand-rolled so this app needs no npm install —
  * server-to-client text frames only, which is all a ticking clock needs.

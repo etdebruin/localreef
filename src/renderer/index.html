@@ -13,10 +13,10 @@
                script-src 'self';
                style-src 'unsafe-inline';
                img-src 'self' data:;
-               frame-src http://*.desktop.localhost:*;
+               frame-src http://*.colony.localhost:*;
                connect-src 'self'"
     />
-    <title>Local Desktop</title>
+    <title>Local Colony</title>
     <style>
       :root {
         --bg: #11131a;
@@ -43,7 +43,7 @@
         -webkit-font-smoothing: antialiased;
       }
 
-      #desktop {
+      #canvas {
         position: relative;
         height: 100%;
         background:
@@ -366,7 +366,7 @@
       }
       #empty[hidden] { display: none; }
 
-      #desktop.dropping::after {
+      #canvas.dropping::after {
         content: 'Drop a project folder to link it';
         position: absolute; inset: 12px;
         border: 2px dashed var(--accent);
@@ -520,8 +520,8 @@
     </style>
   </head>
   <body>
-    <div id="desktop">
-      <div id="chrome">Local Desktop</div>
+    <div id="canvas">
+      <div id="chrome">Local Colony</div>
       <div id="empty" hidden>No apps yet — press ⌘K to build one</div>
       <div id="windows"></div>
       <div id="shield" hidden></div>
@@ -557,7 +557,7 @@
           <div class="field">
             <label for="apps-folder">Projects folder</label>
             <p class="note">
-              Folders in here with a <code>desktop.json</code> appear on the desktop.
+              Folders in here with a <code>colony.json</code> appear on the desktop.
               An empty <code>{}</code> is enough — everything else is inferred.
             </p>
             <div class="row">

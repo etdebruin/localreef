@@ -5,7 +5,7 @@
  * machine-local configuration that the app cannot discover for itself.
  *
  * `appsFolder` is a directory the user keeps projects in. We scan it for apps
- * that have opted in with a `desktop.json` (see `scanApps`).
+ * that have opted in with a `colony.json` (see `scanApps`).
  *
  * `anthropicApiKey` exists because launching from Finder or the Dock inherits
  * no shell environment, so `ANTHROPIC_API_KEY` is simply absent and ⌘K fails

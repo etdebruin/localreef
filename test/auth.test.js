@@ -6,7 +6,7 @@ import { parseCookies, authDecision, AUTH_COOKIE, AUTH_PARAM } from '../src/gate
 const TOKEN = 'tok_abc123'
 
 function decide({ pathname = '/', query = '', cookie = '', header } = {}) {
-  const url = new URL(`http://notes.desktop.localhost${pathname}${query}`)
+  const url = new URL(`http://notes.colony.localhost${pathname}${query}`)
   return authDecision({
     pathname: url.pathname,
     searchParams: url.searchParams,
@@ -81,10 +81,10 @@ test('authDecision', async (t) => {
   })
 
   await t.test('lets the health probe through unauthenticated', () => {
-    assert.equal(decide({ pathname: '/__desktop/health' }).action, 'allow')
+    assert.equal(decide({ pathname: '/__colony/health' }).action, 'allow')
   })
 
   await t.test('does not exempt other reserved paths', () => {
-    assert.equal(decide({ pathname: '/__desktop/sdk.js' }).action, 'deny')
+    assert.equal(decide({ pathname: '/__colony/sdk.js' }).action, 'deny')
   })
 })

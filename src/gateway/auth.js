@@ -6,7 +6,7 @@
  * custom headers to a navigation, so we bootstrap through a one-time token in
  * the query string and convert it into a cookie:
  *
- *   1. renderer navigates to  notes.desktop.localhost:PORT/?__desktop=<token>
+ *   1. renderer navigates to  notes.colony.localhost:PORT/?__colony=<token>
  *   2. gateway sets an HttpOnly cookie and 302s to the clean URL
  *   3. every later request carries the cookie; other processes have no way to
  *      obtain it
@@ -17,13 +17,13 @@
 
 import crypto from 'node:crypto'
 
-export const AUTH_COOKIE = '__desktop_auth'
-export const AUTH_PARAM = '__desktop'
-export const AUTH_HEADER = 'x-desktop-token'
+export const AUTH_COOKIE = '__colony_auth'
+export const AUTH_PARAM = '__colony'
+export const AUTH_HEADER = 'x-colony-token'
 
 // Reachable without credentials so the renderer can probe readiness before it
 // has anywhere to put a cookie. Deliberately a allowlist of one.
-const PUBLIC_PATHS = new Set(['/__desktop/health'])
+const PUBLIC_PATHS = new Set(['/__colony/health'])
 
 export function parseCookies(header) {
   const out = {}
@@ -59,7 +59,7 @@ export function authDecision({ pathname, searchParams, cookies = {}, headerToken
   // Checked before the cookie because it is the credential that actually
   // arrives: an app runs in a cross-site iframe, where a SameSite=Lax cookie
   // is stored but never sent back. Electron attaches this header to every
-  // request bound for *.desktop.localhost.
+  // request bound for *.colony.localhost.
   if (tokensMatch(headerToken, token)) return { action: 'allow' }
 
   if (tokensMatch(cookies[AUTH_COOKIE], token)) return { action: 'allow' }

@@ -13,7 +13,7 @@
  *
  * The geometry never varies. What varies is what sits inside it, which is
  * what stops a dock of mixed apps looking like a pile of stickers (DESIGN.md
- * §12: "a desktop of emoji looks like a Slack channel list").
+ * §4: "a desktop of emoji looks like a Slack channel list").
  */
 
 import fs from 'node:fs/promises'
@@ -80,7 +80,7 @@ export function hueFor(id) {
 /**
  * Load a manifest-declared icon file as a data URI, or null.
  *
- * The path comes out of `desktop.json`, which the user or the model wrote, so
+ * The path comes out of `colony.json`, which the user or the model wrote, so
  * it is untrusted: it is resolved through the same confinement the gateway
  * uses for request paths and rejected if it leaves the app folder.
  */

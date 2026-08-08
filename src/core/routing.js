@@ -1,13 +1,13 @@
 /**
  * Hostname -> app id.
  *
- * Every app lives on its own origin under `*.desktop.localhost`, which is what
+ * Every app lives on its own origin under `*.colony.localhost`, which is what
  * buys us storage partitioning and cross-app isolation for free. This function
  * is the only thing standing between a Host header and the app registry, so it
  * refuses anything it does not fully recognise.
  */
 
-const SUFFIX = '.desktop.localhost'
+const SUFFIX = '.colony.localhost'
 
 // Deliberately strict: no dots (so no nested subdomains), no dot-segments, no
 // separators. An id that gets past this is safe to use as a lookup key.

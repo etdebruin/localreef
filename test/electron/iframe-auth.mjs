@@ -21,7 +21,7 @@ import { AUTH_HEADER, AUTH_PARAM } from '../../src/gateway/auth.js'
 const TOKEN = 'harness-token'
 const INJECT_HEADER = process.env.INJECT_HEADER !== '0'
 
-app.commandLine.appendSwitch('host-resolver-rules', 'MAP *.desktop.localhost 127.0.0.1')
+app.commandLine.appendSwitch('host-resolver-rules', 'MAP *.colony.localhost 127.0.0.1')
 
 const statuses = []
 
@@ -35,8 +35,8 @@ app.whenReady().then(async () => {
   })
   await gateway.listen(0)
 
-  const appUrl = `http://probe.desktop.localhost:${gateway.port}/?${AUTH_PARAM}=${TOKEN}`
-  const filter = { urls: ['*://*.desktop.localhost/*'] }
+  const appUrl = `http://probe.colony.localhost:${gateway.port}/?${AUTH_PARAM}=${TOKEN}`
+  const filter = { urls: ['*://*.colony.localhost/*'] }
 
   if (INJECT_HEADER) {
     session.defaultSession.webRequest.onBeforeSendHeaders(filter, (details, callback) => {

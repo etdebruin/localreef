@@ -1,5 +1,5 @@
 /**
- * Folder + inference + optional desktop.json -> the record the rest of Local Desktop uses.
+ * Folder + inference + optional colony.json -> the record the rest of Local Colony uses.
  *
  * Inference supplies the defaults; the manifest only ever overrides. Nothing
  * downstream should have to ask whether a field was inferred or declared.

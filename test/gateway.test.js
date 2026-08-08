@@ -74,7 +74,7 @@ test('gateway', async (t) => {
   gateway = createGateway({ token: TOKEN, lookup: (id) => apps[id] ?? null })
   await gateway.listen(0)
   const port = gateway.port
-  const H = (id) => `${id}.desktop.localhost:${port}`
+  const H = (id) => `${id}.colony.localhost:${port}`
 
   t.after(async () => {
     await gateway.close()
@@ -88,7 +88,7 @@ test('gateway', async (t) => {
   })
 
   await t.test('rejects an unknown host', async () => {
-    const res = await request(port, `ghost.desktop.localhost:${port}`, '/', { headers: AUTHED })
+    const res = await request(port, `ghost.colony.localhost:${port}`, '/', { headers: AUTHED })
     assert.equal(res.status, 404)
   })
 
@@ -98,7 +98,7 @@ test('gateway', async (t) => {
   })
 
   await t.test('health probe needs no auth', async () => {
-    const res = await request(port, H('notes'), '/__desktop/health')
+    const res = await request(port, H('notes'), '/__colony/health')
     assert.equal(res.status, 200)
   })
 
@@ -120,7 +120,7 @@ test('gateway', async (t) => {
   // A framed app authenticates by header, not cookie — see auth.js.
   await t.test('accepts the token as a request header', async () => {
     const res = await request(port, H('notes'), '/', {
-      headers: { 'x-desktop-token': TOKEN },
+      headers: { 'x-colony-token': TOKEN },
     })
     assert.equal(res.status, 200)
     assert.equal(res.body, '<h1>notes</h1>')
@@ -128,7 +128,7 @@ test('gateway', async (t) => {
 
   await t.test('rejects a wrong token header', async () => {
     const res = await request(port, H('notes'), '/', {
-      headers: { 'x-desktop-token': 'wrong' },
+      headers: { 'x-colony-token': 'wrong' },
     })
     assert.equal(res.status, 401)
   })
@@ -140,7 +140,7 @@ test('gateway', async (t) => {
       socket.on('connect', () => {
         socket.write(
           `GET /hmr HTTP/1.1\r\nHost: ${H('chart')}\r\nUpgrade: websocket\r\n` +
-            `Connection: Upgrade\r\nX-Desktop-Token: ${TOKEN}\r\n\r\n`,
+            `Connection: Upgrade\r\nX-Colony-Token: ${TOKEN}\r\n\r\n`,
         )
       })
       socket.on('data', (c) => {

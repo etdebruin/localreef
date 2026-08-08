@@ -93,7 +93,7 @@ const gateway = createGateway({
   },
 })
 await gateway.listen(0)
-const host = `${record.id}.desktop.localhost:${gateway.port}`
+const host = `${record.id}.colony.localhost:${gateway.port}`
 
 console.log('1. start Vite under the supervisor')
 const state = await supervisor.ensureStarted(record)

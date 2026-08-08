@@ -5,14 +5,14 @@
  *
  * This is the WebSocket sibling of iframe-auth.mjs, and it exists for the same
  * reason that one does. `npm test` and `npm run test:vite` both drive the
- * gateway from Node, where the harness sets `x-desktop-token` on the handshake
+ * gateway from Node, where the harness sets `x-colony-token` on the handshake
  * itself — so they prove the gateway *relays* an authorised upgrade, and prove
  * nothing at all about whether a real page's WebSocket ever carries that
  * credential.
  *
  * It does not, by default. Electron injects the header through a webRequest
  * filter, and Chrome match patterns treat a `*` scheme as http/https only, so
- * `*://*.desktop.localhost/*` never matches `ws://…`. The upgrade arrives at
+ * `*://*.colony.localhost/*` never matches `ws://…`. The upgrade arrives at
  * the gateway unauthenticated and is destroyed. The clock sample sat there
  * saying "disconnected — retrying", and Vite HMR would fail the same way.
  *
@@ -35,7 +35,7 @@ const WS_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11'
 // Set to 1 to watch the old filter fail.
 const HTTP_ONLY_FILTER = process.env.HTTP_ONLY_FILTER === '1'
 
-app.commandLine.appendSwitch('host-resolver-rules', 'MAP *.desktop.localhost 127.0.0.1')
+app.commandLine.appendSwitch('host-resolver-rules', 'MAP *.colony.localhost 127.0.0.1')
 
 const PAGE = `<!doctype html>
 <meta charset="utf-8">
@@ -94,14 +94,14 @@ app.whenReady().then(async () => {
 
   // The filter under test. The http-only form is what shipped.
   const urls = HTTP_ONLY_FILTER
-    ? ['*://*.desktop.localhost/*']
-    : ['*://*.desktop.localhost/*', 'ws://*.desktop.localhost/*', 'wss://*.desktop.localhost/*']
+    ? ['*://*.colony.localhost/*']
+    : ['*://*.colony.localhost/*', 'ws://*.colony.localhost/*', 'wss://*.colony.localhost/*']
 
   session.defaultSession.webRequest.onBeforeSendHeaders({ urls }, (details, callback) => {
     callback({ requestHeaders: { ...details.requestHeaders, [AUTH_HEADER]: TOKEN } })
   })
 
-  const appUrl = `http://probe.desktop.localhost:${gateway.port}/?${AUTH_PARAM}=${TOKEN}`
+  const appUrl = `http://probe.colony.localhost:${gateway.port}/?${AUTH_PARAM}=${TOKEN}`
   const parent = path.join(dir, 'parent.html')
   await fs.writeFile(parent, `<iframe src="${appUrl}" style="width:400px;height:300px"></iframe>`)
 
