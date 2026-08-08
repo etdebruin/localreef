@@ -4,7 +4,12 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 
-import { createSettingsStore, resolveApiKey, expandHome } from '../src/core/settings.js'
+import {
+  createSettingsStore,
+  resolveApiKey,
+  expandHome,
+  DEFAULT_GATEWAY_PORT,
+} from '../src/core/settings.js'
 
 async function scratch() {
   return fs.mkdtemp(path.join(os.tmpdir(), 'ld-settings-'))
@@ -20,6 +25,7 @@ test('createSettingsStore', async (t) => {
       anthropicApiKey: null,
       backgroundId: null,
       ownerName: null,
+      gatewayPort: null,
     })
     await fs.rm(dir, { recursive: true, force: true })
   })
@@ -93,6 +99,7 @@ test('createSettingsStore', async (t) => {
       anthropicApiKey: null,
       backgroundId: null,
       ownerName: null,
+      gatewayPort: null,
     })
     await fs.rm(dir, { recursive: true, force: true })
   })
@@ -108,6 +115,54 @@ test('createSettingsStore', async (t) => {
     assert.equal(settings.nonsense, undefined)
     assert.equal(settings.anthropicApiKey, 'sk-ant-abc')
     await fs.rm(dir, { recursive: true, force: true })
+  })
+})
+
+// The gateway port IS every app's identity on disk: localStorage keys to
+// scheme+host+port, so the port changing across launches strands every app's
+// data under an origin nothing will visit again. It happened — First Chair
+// lost a weigh-in to listen(0). The port must persist.
+test('gatewayPort', async (t) => {
+  await t.test('persists through update and read', async () => {
+    const dir = await scratch()
+    const store = createSettingsStore(path.join(dir, 'settings.json'))
+
+    await store.update({ gatewayPort: 7333 })
+    assert.equal((await store.read()).gatewayPort, 7333)
+    await fs.rm(dir, { recursive: true, force: true })
+  })
+
+  await t.test('is null until something sets it', async () => {
+    const dir = await scratch()
+    const store = createSettingsStore(path.join(dir, 'settings.json'))
+    assert.equal((await store.read()).gatewayPort, null)
+    await fs.rm(dir, { recursive: true, force: true })
+  })
+
+  await t.test('survives an unrelated settings write', async () => {
+    const dir = await scratch()
+    const store = createSettingsStore(path.join(dir, 'settings.json'))
+
+    await store.update({ gatewayPort: 7333 })
+    await store.update({ ownerName: 'Etienne' })
+    assert.equal((await store.read()).gatewayPort, 7333)
+    await fs.rm(dir, { recursive: true, force: true })
+  })
+
+  await t.test('refuses garbage rather than binding to it', async () => {
+    const dir = await scratch()
+    const store = createSettingsStore(path.join(dir, 'settings.json'))
+
+    for (const junk of ['not-a-port', 3.14, 0, -1, 70000, true]) {
+      await store.update({ gatewayPort: junk })
+      assert.equal((await store.read()).gatewayPort, null, `accepted ${JSON.stringify(junk)}`)
+    }
+    await fs.rm(dir, { recursive: true, force: true })
+  })
+
+  await t.test('the default is a real unprivileged port', () => {
+    assert.equal(Number.isInteger(DEFAULT_GATEWAY_PORT), true)
+    assert.ok(DEFAULT_GATEWAY_PORT >= 1024 && DEFAULT_GATEWAY_PORT <= 65535)
   })
 })
 

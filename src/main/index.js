@@ -15,7 +15,7 @@ import fs from 'node:fs/promises'
 
 import { scanApps, readApp } from '../core/registry.js'
 import { createLinkStore } from '../core/links.js'
-import { createSettingsStore, resolveApiKey } from '../core/settings.js'
+import { createSettingsStore, resolveApiKey, DEFAULT_GATEWAY_PORT } from '../core/settings.js'
 import { createSessionStore } from '../core/session.js'
 import { readIconImage, isImageIcon, initialsFor, hueFor } from '../core/icon.js'
 import { BACKGROUNDS, resolveBackground } from '../core/backgrounds.js'
@@ -39,6 +39,23 @@ app.commandLine.appendSwitch('host-resolver-rules', 'MAP *.reef.localhost 127.0.
 // build would keep its settings, links and generated apps in a *different*
 // folder from the dev build. Same folder either way.
 app.setPath('userData', path.join(app.getPath('appData'), 'localreef'))
+
+// One Reef at a time. Two instances would fight over the pinned gateway port,
+// and two desktops writing one session.json was never coherent anyway. A
+// second launch hands focus to the first instead — including the packaged
+// app and `npm start` side by side, which share userData and were already
+// quietly corrupting each other.
+if (!app.requestSingleInstanceLock()) {
+  app.exit(0)
+}
+app.on('second-instance', () => {
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore()
+    mainWindow.focus()
+  } else if (app.isReady()) {
+    createWindow()
+  }
+})
 
 const TOKEN = crypto.randomBytes(24).toString('hex')
 
@@ -351,7 +368,28 @@ app.whenReady().then(async () => {
   )
 
   gateway = createGateway({ token: TOKEN, lookup: (id) => lookupForGateway(id) })
-  await gateway.listen(0)
+
+  // The port is identity, not plumbing: every app's origin — and therefore
+  // its localStorage — includes it. `listen(0)` here cost a real user's data,
+  // stranding it under the previous launch's origin. Pin the port, persist
+  // the pin, and never fall back to another one: a fallback would "work"
+  // while silently swapping every app's storage out from under it.
+  const stored = await settings.read()
+  const gatewayPort = stored.gatewayPort ?? DEFAULT_GATEWAY_PORT
+  if (stored.gatewayPort == null) await settings.update({ gatewayPort })
+
+  try {
+    await gateway.listen(gatewayPort)
+  } catch (err) {
+    dialog.showErrorBox(
+      'Local Reef could not start',
+      `Port ${gatewayPort} is already in use, and apps' saved data lives on it, ` +
+        `so Reef will not start on a different one.\n\n` +
+        `Quit whatever is holding the port and relaunch.\n\n(${err.message})`,
+    )
+    app.exit(1)
+    return
+  }
 
   await refreshApps()
   await createWindow()

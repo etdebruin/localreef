@@ -76,6 +76,17 @@ Distinct origin per app (free storage partitioning, free cross-app isolation), a
 Chromium treats `.localhost` as a secure context, so apps get `crypto.subtle`,
 service workers, and everything else gated on HTTPS — without a certificate.
 
+**The partitioning is only free while the origin is stable — and the origin
+includes the gateway's port.** `listen(0)` minted a new port per launch, which
+minted a new origin per launch, which stranded every app's localStorage under
+the previous origin on every restart; a real user lost real data to it. The
+port is pinned (`DEFAULT_GATEWAY_PORT`, persisted in settings on first run)
+and startup refuses to fall back to another port when it is taken — a
+fallback would "work" while silently swapping every app's storage out from
+under it. A single-instance lock keeps a second Reef from ever contesting the
+port. `test/electron/iframe-storage.mjs` proves storage survives a real
+relaunch, and its `REEF_STORAGE_DRIFT=1` knob re-demonstrates the loss.
+
 Don't rely on the system resolver. Pin it:
 
 ```js

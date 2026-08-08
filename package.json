@@ -35,6 +35,7 @@
     "test:electron:ws": "electron test/electron/iframe-websocket.mjs",
     "test:electron:media": "electron test/electron/iframe-media.mjs",
     "test:electron:console": "electron test/electron/iframe-console.mjs",
+    "test:electron:storage": "REEF_STORAGE_PHASE=write electron test/electron/iframe-storage.mjs && REEF_STORAGE_PHASE=read electron test/electron/iframe-storage.mjs",
     "icon": "electron scripts/make-icon.mjs",
     "build:mac": "node scripts/package.mjs",
     "install:mac": "node scripts/install.mjs"

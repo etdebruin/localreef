@@ -241,7 +241,16 @@ export function createGateway({ token, lookup }) {
       return server.address()?.port ?? null
     },
     listen(port = 0, host = '127.0.0.1') {
-      return new Promise((resolve) => server.listen(port, host, () => resolve(this.port)))
+      // The port is pinned in normal use (origins depend on it), so finding it
+      // occupied is a real startup outcome — reject so the caller can explain,
+      // rather than letting the 'error' event take the process down.
+      return new Promise((resolve, reject) => {
+        server.once('error', reject)
+        server.listen(port, host, () => {
+          server.off('error', reject)
+          resolve(this.port)
+        })
+      })
     },
     close() {
       return new Promise((resolve) => {

@@ -218,4 +218,18 @@ test('gateway', async (t) => {
     assert.match(got, /101 Switching Protocols/)
     assert.match(got, /hmr-hello/)
   })
+
+  // The port is pinned now (origins depend on it), so a launch can find its
+  // port occupied. That must be a rejection main can catch and explain — an
+  // unhandled 'error' event here takes the whole process down instead.
+  await t.test('listen rejects when the port is already taken', async () => {
+    const squatter = http.createServer(() => {})
+    await new Promise((r) => squatter.listen(0, '127.0.0.1', r))
+    const taken = squatter.address().port
+
+    const second = createGateway({ token: TOKEN, lookup: () => null })
+    await assert.rejects(second.listen(taken), /EADDRINUSE/)
+
+    await new Promise((r) => squatter.close(r))
+  })
 })

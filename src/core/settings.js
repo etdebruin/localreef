@@ -18,7 +18,28 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 
-const DEFAULTS = { appsFolder: null, anthropicApiKey: null, backgroundId: null, ownerName: null }
+const DEFAULTS = {
+  appsFolder: null,
+  anthropicApiKey: null,
+  backgroundId: null,
+  ownerName: null,
+  gatewayPort: null,
+}
+
+/**
+ * Where the gateway listens when settings do not say otherwise. Persisted on
+ * first launch rather than left implicit, because this number is load-bearing
+ * in a way a default must not be: every app's origin — and therefore its
+ * localStorage — includes the port. `listen(0)` cost a real user's data: a new
+ * ephemeral port each launch meant a new origin each launch, stranding every
+ * app's storage under the previous one. 7333 is "REEF" on a phone keypad.
+ */
+export const DEFAULT_GATEWAY_PORT = 7333
+
+/** A usable TCP port a server may bind without privileges, or null. */
+function cleanPort(value) {
+  return Number.isInteger(value) && value >= 1024 && value <= 65535 ? value : null
+}
 
 /** Fields we persist. Anything else in the file is dropped on write. */
 const KEYS = Object.keys(DEFAULTS)
@@ -42,6 +63,7 @@ function normalise(raw) {
   settings.anthropicApiKey = clean(raw.anthropicApiKey)
   settings.backgroundId = clean(raw.backgroundId)
   settings.ownerName = clean(raw.ownerName)
+  settings.gatewayPort = cleanPort(raw.gatewayPort)
 
   const folder = clean(raw.appsFolder)
   settings.appsFolder = folder ? path.resolve(expandHome(folder)) : null

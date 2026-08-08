@@ -13,6 +13,7 @@ npm run test:electron:ui   # dock/window/settings, edit pane, hello, session res
 npm run test:electron:ws   # browser-initiated WebSocket from an app iframe
 npm run test:electron:media # mic/camera Permissions Policy on an app iframe
 npm run test:electron:console # app-frame errors reach main, attributed per app
+npm run test:electron:storage # app localStorage survives a real relaunch
 npm run test:vite          # real Vite through the gateway, incl. live HMR
 npm run shot               # screenshot the running app into .shots/
 npm run install:mac        # rebuild Local Reef.app into /Applications, if stale
@@ -95,6 +96,17 @@ paths remain as fallbacks. `test/electron/iframe-auth.mjs` exists solely to
 guard this.
 
 ## Traps that have already cost time
+
+**The gateway port is identity, not plumbing.** An app's origin is
+`<id>.reef.localhost:<port>`, and localStorage keys to the full origin — so
+`listen(0)` gave every launch a new port and stranded every app's data under
+the previous origin. A real user lost a day's entries to this. The port is
+pinned and persisted (`gatewayPort` in settings, default 7333); never "fix" a
+port conflict by falling back to another port, that re-ships the data loss
+silently. Related: the single-instance lock means `npm start` and the Dock
+app no longer run side by side — the second launch focuses the first.
+`test/electron/iframe-storage.mjs` guards it across a real process restart;
+`REEF_STORAGE_DRIFT=1` demonstrates the loss.
 
 **Upgraded sockets escape `closeAllConnections()`.** After an HTTP upgrade Node
 detaches the socket from the server's tracked list, but `getConnections()` still
