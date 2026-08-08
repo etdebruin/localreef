@@ -1,6 +1,6 @@
 # Local Reef
 
-A desktop for local apps. Click an icon, your app opens — no terminal, no
+A shell for local apps. Click an icon, your app opens — no terminal, no
 `npm run dev`, no remembering which port anything is on.
 
 Apps are addressed by identity, not URL: `notes`, never `localhost:5173`.
@@ -35,7 +35,7 @@ Takes roughly two minutes. The result is a single self-contained `index.html`
 with no build step and no install, so it opens the moment it exists.
 
 Needs `ANTHROPIC_API_KEY` in the environment. Generated apps are written to
-`~/Library/Application Support/Local Reef/apps/`, never into this repo — so
+`~/Library/Application Support/localreef/apps/`, never into this repo — so
 `apps/` stays yours.
 
 The model writes files through a toolset confined to that one app folder;
@@ -81,7 +81,7 @@ own entrypoint hardcodes a port — needs a four-line `reef.json` in its root:
 ## Adding your own app
 
 Drop a folder into `apps/`. There is usually nothing to configure — Local
-Desktop works out what it is:
+Reef works out what it is:
 
 ```
 apps/my-thing/
@@ -136,28 +136,38 @@ browser rather than by anything we wrote. The gateway is an HTTP server rather
 than a custom `app://` protocol for one concrete reason: Chromium custom
 schemes cannot carry a WebSocket, and WebSockets are how HMR works.
 
-Requests are authenticated with a per-launch token that becomes an `HttpOnly`
-cookie, so other processes on your machine can't reach your apps by forging a
-`Host` header.
+Requests are authenticated with a per-launch token, attached by Electron as an
+`x-reef-token` header on every request bound for `*.reef.localhost` and stripped
+before forwarding, so other processes on your machine can't reach your apps by
+forging a `Host` header. It has to be a header rather than a cookie: an app
+frame is cross-site relative to the shell, and a `SameSite=Lax` cookie is stored
+and then never sent back.
 
 ---
 
 ## Development
 
 ```
-npm test                # 180 tests, including end-to-end against the real samples
+npm test                 # 225 tests, including end-to-end against the real samples
 npm run lint
-npm run test:electron   # iframe auth in a real Electron window
-npm run test:electron:ui # window drag/close via real Chromium input events
+npm run test:electron    # iframe auth in a real Electron window
+npm run test:electron:ui # dock/window/settings via real Chromium input events
+npm run test:electron:ws # a browser-initiated WebSocket from an app iframe
+npm run test:vite        # a real Vite dev server through the gateway, incl. HMR
+npm run shot             # screenshot the running app into .shots/
 ```
 
-The two Electron suites are separate because they need a real GUI — and they
-exist because the plain suite structurally cannot catch what they cover. It
+The Electron suites are separate because they need a real GUI — and they exist
+because the plain suite structurally cannot catch what they cover. It
 sets the `Cookie` header directly with `http.request`, which bypasses browser
 cookie policy; that is exactly how a bug shipped where every app iframe got a
 401. The UI suite drives `sendInputEvent` rather than `element.click()`, since
 a programmatic click skips the pointer sequence and would pass happily while
-the close button was broken.
+the close button was broken. The WebSocket suite exists for the same reason
+one layer down: every Node-driven test sets the auth header on the handshake
+itself, so they all proved the gateway relays an authorised upgrade and none
+proved a browser ever sends one. It did not, and every app's WebSocket was
+silently dead.
 
 The end-to-end suite starts the real `apps/clock` server, proxies it, and
 asserts live WebSocket frames arrive — so a green run means the actual stack
@@ -167,9 +177,23 @@ works, not just the units.
 
 ## Status
 
-Milestones 1–4 are done: registry, supervisor, gateway, the desktop, ⌘K
-generation, and Fix with AI. Apps in any language run via `type: "server"`, and
-projects anywhere on disk can be linked in place.
+Milestones 1–4 are done: registry, supervisor, gateway, the canvas, ⌘K
+generation, and Fix with AI. Apps in any language run via `type: "server"`,
+projects anywhere on disk can be linked in place, and a projects folder can be
+scanned for anything carrying a `reef.json`.
 
-Outstanding work — including one unverified architectural claim worth reading
-before trusting the design — is tracked in [TODO.md](./TODO.md).
+Not built yet: live editing (M5), the `reef.*` SDK bridge, pop-out to native
+windows, and intents. Outstanding work is tracked in [TODO.md](./TODO.md).
+
+This is early software built in the open. It works, and it is not yet polished
+in the places [TODO.md](./TODO.md) says it isn't.
+
+---
+
+## License
+
+[MIT](./LICENSE) © Etienne de Bruin
+
+Issues and pull requests are welcome. [DESIGN.md](./DESIGN.md) explains the
+reasoning behind each architectural decision and is the right place to start —
+several of them exist because the obvious approach was tried and did not work.

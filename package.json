@@ -1,8 +1,26 @@
 {
-  "name": "local-reef",
+  "name": "localreef",
   "version": "0.1.0",
+  "description": "A shell for local apps. Address them by name, not by port.",
+  "homepage": "https://localreef.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/etdebruin/localreef.git"
+  },
+  "bugs": {
+    "url": "https://github.com/etdebruin/localreef/issues"
+  },
+  "license": "MIT",
+  "author": "Etienne de Bruin",
+  "keywords": [
+    "electron",
+    "localhost",
+    "local-first",
+    "developer-tools",
+    "app-launcher",
+    "desktop"
+  ],
   "private": true,
-  "description": "A desktop for local apps",
   "type": "module",
   "main": "src/main/index.js",
   "scripts": {
