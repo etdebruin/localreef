@@ -10,6 +10,7 @@
  * bounding boxes — the effect on screen — never classList.
  */
 import { app, BrowserWindow } from 'electron'
+import fs from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -110,6 +111,20 @@ app.whenReady().then(async () => {
     JSON.stringify(editBox),
   )
 
+  // Close and minimize lean on the traffic-light convention; a blue "edit"
+  // bubble has no convention carrying it, so its ✎ must be legible without
+  // hovering. The pointer is over the dock here, so this is the at-rest state.
+  const glyphAtRest = await js(`(() => {
+    const el = document.querySelector('.window .titlebar button.edit')
+    if (!el) return null
+    return { color: getComputedStyle(el).color, glyph: el.textContent }
+  })()`)
+  check(
+    'the ✎ is visible at rest, not only on hover',
+    glyphAtRest?.glyph === '✎' && !/transparent|rgba\(\s*\d+,\s*\d+,\s*\d+,\s*0\s*\)/.test(glyphAtRest?.color ?? ''),
+    JSON.stringify(glyphAtRest),
+  )
+
   // --- opening the pane: chat visible, stage intact, window wider ---
   const widthBefore = await js(`document.querySelector('.window')?.getBoundingClientRect().width`)
   const editPoint = await centreOf('.window .titlebar button.edit')
@@ -143,6 +158,33 @@ app.whenReady().then(async () => {
     paneOpen && widthBefore && paneOpen.window > widthBefore,
     `${widthBefore} -> ${paneOpen?.window}`,
   )
+
+  // The chat is glass: its own paint must be translucent AND nothing behind
+  // it may paint an opaque surface, or the "transparency" is a solid colour
+  // with extra steps. Assert both layers, then photograph the real thing.
+  const glass = await js(`(() => {
+    const w = document.querySelector('.window')
+    const chat = w?.querySelector('.chat')
+    if (!chat) return null
+    const alphaOf = (c) => {
+      const m = c.match(/rgba?\\(\\s*\\d+,\\s*\\d+,\\s*\\d+(?:,\\s*([\\d.]+))?\\)/)
+      return m ? (m[1] === undefined ? 1 : Number(m[1])) : 1
+    }
+    return {
+      chatAlpha: alphaOf(getComputedStyle(chat).backgroundColor),
+      windowAlpha: alphaOf(getComputedStyle(w).backgroundColor),
+      blurred: getComputedStyle(chat).backdropFilter.includes('blur'),
+    }
+  })()`)
+  check(
+    'the reef shows through the chat pane',
+    glass && glass.chatAlpha < 1 && glass.windowAlpha === 0 && glass.blurred === true,
+    JSON.stringify(glass),
+  )
+
+  await fs.mkdir(path.join(projectRoot, '.shots'), { recursive: true })
+  const shot = await win.webContents.capturePage()
+  await fs.writeFile(path.join(projectRoot, '.shots', 'edit-pane-glass.png'), shot.toPNG())
 
   // --- a message round-trips through the stubbed bridge ---
   await js(`(() => {
