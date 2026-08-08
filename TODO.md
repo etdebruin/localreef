@@ -97,6 +97,11 @@ to be every app's WebSocket failing.)*
   multi-monitor; the hatch does not exist.
 - **Intents and the shared store.** The part that makes apps compose rather than
   coexist, and the long-term reason this is a shell and not a launcher.
+- **Remote access (phone).** Designed in [REMOTE.md](./REMOTE.md): the phone is
+  a client of the gateway's second face — LAN tier first (QR pairing, port-per-app
+  origins, device cookies), Tailscale as an optional accelerant, a first-party
+  relay as the eventual anywhere answer. R2 depends on making `keepAlive` real
+  (see Papercuts).
 
 ---
 

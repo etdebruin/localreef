@@ -455,3 +455,5 @@ Then: pop-out, `reef.ai`, intents, shared store. (Python arrived early —
   plausible. Out of scope for v1, but don't paint into a corner.
 - **Bundled Node.** Deferred to post-v1, but it's the line between "works for
   developers" and "works."
+- **Remote access.** Answered in [REMOTE.md](./REMOTE.md): the phone is a client
+  of a second gateway face, never a host. Adds one row to the §10 table when built.
