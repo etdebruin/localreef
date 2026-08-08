@@ -151,6 +151,34 @@ works" and "it just works if you're already a developer."
 start, with progress surfaced in the launching state. Detect the package manager from
 the lockfile.
 
+### Icons: one geometry, three contents
+
+An icon is always a square tile — same size, same corner, same shadow. Only what
+sits inside varies:
+
+| Declared | Renders as |
+|---|---|
+| a file in the app folder (`icon.png`, `logo.svg`) | the art, edge to edge |
+| an emoji | the emoji on a **neutral** tile |
+| nothing | a tile tinted from the app id, carrying the name's initials |
+
+Holding the geometry fixed is the whole trick. The original worry — that a desktop
+of emoji reads like a Slack channel list — was really about *inconsistency*: emoji,
+bare letters and art all at different visual weights, each supplying its own shape.
+Fixing the frame and letting only the contents change makes a mixed set read as one
+family.
+
+Generated tiles vary **hue only**; lightness and chroma are constants in CSS
+(`oklch(0.62 0.15 <hue>)`). Equal perceived weight across the set is what separates
+"designed" from "randomly coloured". The hue comes from an FNV-1a hash of the id
+with a golden-angle stride, so sibling ids like `app1`/`app2` land far apart.
+
+Icon files ride to the renderer as data URIs, so they are capped at 512 KB and
+resolved through the gateway's path confinement — the path comes out of a manifest
+the user or the model wrote, so it is untrusted. A path that escapes the app folder,
+or a file that will not load, falls back to a generated tile rather than a blank
+square.
+
 ---
 
 ## 5. Lifecycle
@@ -366,8 +394,6 @@ Then: pop-out, `desktop.ai`, intents, shared store. (Python arrived early —
 
 ## 12. Open questions
 
-- **Icon design.** Emoji is the fast path and reads fine at desk scale, but a desktop
-  of emoji looks like a Slack channel list. Worth exploring generated glyphs.
 - **Multi-window per app.** Currently one live frame per app. Two views of the same
   notes app is a reasonable want, and the window model would need to change to support it.
 - **Sync.** Apps are folders and data is SQLite, so git-backing the whole desktop is

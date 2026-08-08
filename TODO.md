@@ -16,6 +16,13 @@ the ledger.
   with real stderr.
 - **M4 — ⌘K.** Generation from a description, plus Fix with AI on the crash panel.
 - **Linked apps.** Any folder on disk, run in place.
+- **Settings.** A scanned projects folder (opt-in per app via `desktop.json`) and
+  an API key stored in `userData`, so ⌘K works launched from Finder or the Dock.
+- **Dock and window controls.** Dock replaces canvas icons; minimize parks a
+  window without stopping the app, × still quits it.
+- **Square app icons.** One geometry, three contents — supplied art, an emoji on
+  a neutral tile, or a hue-tinted tile with initials. Closes the icon-design
+  open question in DESIGN.md §4.
 - **Any-language servers.** `type: "server"` is a shell command with `$PORT`, so
   the "Python runtime" item from the original plan is closed — Python, Go, or a
   binary all work today.
@@ -41,16 +48,10 @@ decision rather than just leave one unmade.
 
 ## Papercuts
 
-- **API key comes only from the environment.** Launch from Finder or the Dock and
-  both ⌘K and Fix fail, because the app inherits no `ANTHROPIC_API_KEY`. Same
-  class of problem as the PATH issue the supervisor already solves. Wants a
-  config file in `userData` read at startup.
 - **`keepAlive` is parsed but not enforced.** Closing a window stops a server app
   immediately; the warm-hold TTL in the manifest does nothing.
-- **Window layout is not persisted.** Position and size are lost on relaunch,
-  though the design calls for storing them.
-- **Emoji icons.** Fine at desk scale, but a full desktop of them reads like a
-  Slack channel list. See DESIGN.md §12.
+- **Window layout is not persisted.** Position, size and minimized state are lost
+  on relaunch, though the design calls for storing them.
 
 ---
 

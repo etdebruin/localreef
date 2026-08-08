@@ -92,16 +92,81 @@
       .dock-app:hover { transform: scale(1.18) translateY(-2px); }
       .dock-app:active { transform: scale(1.04); }
 
-      .dock-app .glyph {
-        width: 44px; height: 44px;
-        display: grid; place-items: center;
-        font-size: 24px;
+      /* --- App tiles -------------------------------------------------------
+         Always square, always the same corner and shadow. Only the contents
+         vary — supplied art, a supplied emoji, or a tile tinted from the app
+         id. Holding the geometry fixed is what stops a dock of mixed apps
+         reading as a pile of stickers (DESIGN.md §12). */
+      .tile {
+        position: relative;
+        width: 48px; height: 48px;
         border-radius: 12px;
-        background: linear-gradient(160deg, var(--surface-2), var(--surface));
-        border: 1px solid var(--line);
-        box-shadow: 0 2px 6px rgba(0,0,0,0.35);
+        display: grid; place-items: center;
+        overflow: hidden;
+        /* Contact shadow plus a hairline top highlight: enough to seat the
+           tile on the dock without turning it into a button. */
+        box-shadow:
+          0 2px 5px rgba(0, 0, 0, 0.4),
+          inset 0 1px 0 rgba(255, 255, 255, 0.14);
       }
-      .dock-app.broken .glyph { border-color: #5b2b2b; color: var(--danger); }
+
+      .tile--image img {
+        width: 100%; height: 100%;
+        object-fit: cover;
+        display: block;
+      }
+
+      /* Emoji carry their own colour, so the tile behind them stays neutral —
+         a tinted background would fight whatever hue the emoji already is. */
+      .tile--emoji {
+        background: linear-gradient(160deg, var(--surface-2), #191d27);
+      }
+      .tile-glyph {
+        font-size: 27px;
+        line-height: 1;
+        /* Emoji render with their own baseline metrics; nudge to true centre. */
+        transform: translateY(1px);
+      }
+
+      /* Generated: hue varies per app, lightness and chroma do not. Identical
+         perceived weight across the set is what makes it look designed rather
+         than randomly coloured. */
+      .tile--generated {
+        background: linear-gradient(
+          160deg,
+          oklch(0.62 0.15 var(--hue)),
+          oklch(0.48 0.14 calc(var(--hue) + 12))
+        );
+      }
+      .tile-initials {
+        font-size: 19px;
+        font-weight: 560;
+        letter-spacing: 0.01em;
+        color: oklch(0.97 0.025 var(--hue));
+      }
+
+      .dock-app.broken .tile {
+        box-shadow: 0 2px 5px rgba(0,0,0,0.4), inset 0 0 0 1.5px var(--danger);
+      }
+
+      /* Titlebar copy of the same tile, so an app looks like itself in both
+         places. */
+      .tile-sm {
+        position: relative;
+        width: 17px; height: 17px;
+        border-radius: 5px;
+        display: grid; place-items: center;
+        overflow: hidden;
+        flex: none;
+      }
+      .tile-sm img { width: 100%; height: 100%; object-fit: cover; display: block; }
+      .tile-sm .tile-glyph { font-size: 12px; transform: none; }
+      .tile-sm .tile-initials { font-size: 8.5px; font-weight: 600; }
+      .tile-sm.tile-sm--emoji { background: none; }
+      .tile-sm.tile-sm--generated {
+        background: linear-gradient(160deg, oklch(0.62 0.15 var(--hue)), oklch(0.48 0.14 calc(var(--hue) + 12)));
+      }
+      .tile-sm.tile-sm--generated .tile-initials { color: oklch(0.97 0.025 var(--hue)); }
 
       /* Running indicator. Always in the layout so the icon never shifts when
          an app starts — only its opacity changes. */
@@ -118,7 +183,7 @@
 
       /* Minimized: still running, but parked. Dim the icon so the dock says
          where the window went. */
-      .dock-app.minimized .glyph { opacity: 0.45; }
+      .dock-app.minimized .tile { opacity: 0.42; }
 
       .dock-sep {
         width: 1px;

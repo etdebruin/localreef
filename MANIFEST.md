@@ -47,7 +47,7 @@ Every field is optional.
 | Field | Default | Notes |
 |---|---|---|
 | `name` | folder name, title-cased | Shown under the icon and in window chrome |
-| `icon` | first letter, generated tile | Emoji, or a path to an image in the folder |
+| `icon` | generated tile | Emoji, or a path to an image in the folder. See below. |
 | `type` | inferred | `static` \| `server`. Set it to override inference. |
 | `root` | `dist` if present, else `.` | Static only — directory to serve |
 | `run` | inferred from `package.json` | Server only — the spawn command. `$PORT` is expanded. |
@@ -57,6 +57,25 @@ Every field is optional.
 | `window` | `{ width: 800, height: 600, resizable: true }` | Initial geometry; user resizes are persisted and win afterward |
 | `permissions` | `[]` | See below |
 | `intents` | `[]` | Verbs this app handles; used by ⌘K routing (v1.5) |
+
+### Icons
+
+An icon is always a square tile. What you declare decides what fills it:
+
+```json
+{ "icon": "icon.png" }   // the art, edge to edge
+{ "icon": "📝" }          // the emoji, on a neutral tile
+{}                        // a tile tinted from the app id, with initials
+```
+
+Image paths are relative to the app folder, may be `.png` `.svg` `.jpg` `.webp`
+`.gif` `.avif` `.ico`, and are capped at **512 KB**. A path that points outside the
+app folder, or a file that will not load, falls back to a generated tile — a broken
+icon never leaves a blank square.
+
+You do not need to supply anything. The generated tile is a real icon, not a
+placeholder: hue is derived from the app id and held at a fixed lightness and
+chroma, so a desktop of them looks like a set.
 
 ### Injected environment (node apps)
 

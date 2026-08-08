@@ -29,10 +29,33 @@ function h(tag, props = {}, ...children) {
   return el
 }
 
-function glyphFor(app) {
-  if (app.icon) return app.icon
-  if (app.status === 'broken') return '!'
-  return app.name.slice(0, 1).toUpperCase()
+/**
+ * Build an app's square tile.
+ *
+ * Geometry never varies — same square, same corner, same shadow — so a dock of
+ * mixed apps reads as one set. Only the contents change: supplied art, a
+ * supplied emoji, or a tile tinted from the app's id. Main decides which;
+ * this only draws it.
+ */
+function tileFor(app, className = 'tile') {
+  const tile = app.tile ?? { kind: 'generated', initials: '?', hue: 0 }
+  const el = h('span', { className: `${className} ${className}--${tile.kind}` })
+
+  if (tile.kind === 'image') {
+    el.append(h('img', { src: tile.image, alt: '', draggable: false }))
+    return el
+  }
+
+  if (tile.kind === 'emoji') {
+    el.append(h('span', { className: 'tile-glyph', textContent: tile.glyph }))
+    return el
+  }
+
+  // Hue only. Lightness and chroma are fixed in CSS so every generated tile
+  // carries the same visual weight and the set looks deliberate.
+  el.style.setProperty('--hue', String(tile.hue))
+  el.append(h('span', { className: 'tile-initials', textContent: tile.initials }))
+  return el
 }
 
 // ----------------------------------------------------------------- dock
@@ -59,7 +82,7 @@ async function renderDock() {
         // tooltip, the way a macOS dock does it.
         title: app.error ? `${app.name} — ${app.error}` : app.name,
       },
-      h('span', { className: 'glyph', textContent: glyphFor(app) }),
+      tileFor(app),
       h('span', { className: 'dot' }),
     )
 
@@ -138,7 +161,7 @@ function makeWindow(app) {
   const titlebar = h(
     'div',
     { className: 'titlebar' },
-    h('span', { textContent: app.icon ?? '' }),
+    tileFor(app, 'tile-sm'),
     h('span', { className: 'name', textContent: app.name }),
     h('span', { className: 'spacer' }),
   )

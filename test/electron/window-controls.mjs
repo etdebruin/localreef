@@ -76,6 +76,46 @@ app.whenReady().then(async () => {
     await wait(260)
   }
 
+  // --- icons are square, uniform, and mode-appropriate ---
+  const tiles = await js(`(() => [...document.querySelectorAll('.dock-app .tile')].map((el) => {
+    const r = el.getBoundingClientRect()
+    return { w: Math.round(r.width), h: Math.round(r.height), cls: el.className }
+  }))()`)
+
+  check('every app has a tile', Array.isArray(tiles) && tiles.length === 2, JSON.stringify(tiles))
+  check(
+    'every tile is square',
+    tiles.length > 0 && tiles.every((t) => t.w === t.h && t.w > 0),
+    JSON.stringify(tiles.map((t) => `${t.w}x${t.h}`)),
+  )
+  check(
+    'every tile is the same size',
+    new Set(tiles.map((t) => t.w)).size === 1,
+    `sizes=${[...new Set(tiles.map((t) => t.w))]}`,
+  )
+  check(
+    'a declared emoji renders as an emoji tile',
+    tiles.some((t) => t.cls.includes('tile--emoji')),
+  )
+  check(
+    'an app with no icon falls back to a generated tile',
+    tiles.some((t) => t.cls.includes('tile--generated')),
+  )
+
+  // The generated tile's colour must actually resolve — an unsupported oklch()
+  // or an unset --hue would silently render a transparent square.
+  const generated = await js(`(() => {
+    const el = document.querySelector('.tile--generated')
+    if (!el) return null
+    const s = getComputedStyle(el)
+    return { hue: s.getPropertyValue('--hue').trim(), bg: s.backgroundImage.slice(0, 40) }
+  })()`)
+  check(
+    'the generated tile resolves a real colour',
+    generated?.hue === '212' && generated.bg.includes('gradient'),
+    JSON.stringify(generated),
+  )
+
   // --- open a window from the dock ---
   const iconPoint = await centreOf('.dock-app')
   check('the app appears in the dock', Boolean(iconPoint))

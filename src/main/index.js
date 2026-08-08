@@ -16,6 +16,7 @@ import fs from 'node:fs/promises'
 import { scanApps, readApp } from '../core/registry.js'
 import { createLinkStore } from '../core/links.js'
 import { createSettingsStore, resolveApiKey } from '../core/settings.js'
+import { readIconImage, isImageIcon, initialsFor, hueFor } from '../core/icon.js'
 import { createSupervisor } from './supervisor.js'
 import { createGateway } from '../gateway/index.js'
 import { AUTH_PARAM, AUTH_HEADER } from '../gateway/auth.js'
@@ -71,8 +72,42 @@ async function refreshApps() {
     ...discovered.map((a) => ({ ...a, discovered: true })),
     ...linked.map((a) => ({ ...a, linked: true })),
   ]
+  // Resolve declared icon files once per refresh rather than per render — a
+  // linked app's icon lives on disk wherever the project does.
+  await Promise.all(
+    all.map(async (record) => {
+      record.iconImage = await readIconImage(record.dir, record.icon)
+    }),
+  )
+
   apps = new Map(all.map((a) => [a.id, a]))
   return [...apps.values()]
+}
+
+/**
+ * Everything the renderer needs to draw the tile, decided here so the renderer
+ * never has to reason about what an icon is.
+ *
+ * `generated` is the fallback for both "no icon declared" and "declared an
+ * image file we could not read" — a broken path should still leave a usable
+ * icon rather than a blank square.
+ */
+function tileFor(record) {
+  if (record.iconImage) {
+    return { kind: 'image', image: record.iconImage, glyph: null, initials: null, hue: null }
+  }
+
+  if (record.icon && !isImageIcon(record.icon)) {
+    return { kind: 'emoji', image: null, glyph: record.icon, initials: null, hue: null }
+  }
+
+  return {
+    kind: 'generated',
+    image: null,
+    glyph: null,
+    initials: initialsFor(record.name),
+    hue: hueFor(record.id),
+  }
 }
 
 function urlFor(id, { withToken = false } = {}) {
@@ -89,6 +124,7 @@ function serialise(record) {
     discovered: record.discovered ?? false,
     name: record.name,
     icon: record.icon,
+    tile: tileFor(record),
     type: record.type,
     error: record.error,
     status: record.error ? 'broken' : state.status,

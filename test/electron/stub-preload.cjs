@@ -7,8 +7,27 @@ const { contextBridge } = require('electron')
 let savedSettings = null
 
 contextBridge.exposeInMainWorld('desktop', {
+  // Two apps so the tile modes are both exercised: one declaring an emoji,
+  // one declaring nothing and falling back to a generated tile.
   listApps: async () => [
-    { id: 'probe', name: 'Probe', icon: '🧪', type: 'static', status: 'stopped', linked: false },
+    {
+      id: 'probe',
+      name: 'Probe',
+      icon: '🧪',
+      tile: { kind: 'emoji', image: null, glyph: '🧪', initials: null, hue: null },
+      type: 'static',
+      status: 'stopped',
+      linked: false,
+    },
+    {
+      id: 'feed-reader',
+      name: 'Feed Reader',
+      icon: null,
+      tile: { kind: 'generated', image: null, glyph: null, initials: 'FR', hue: 212 },
+      type: 'static',
+      status: 'stopped',
+      linked: false,
+    },
   ],
   // about:blank keeps the iframe from needing a live origin; the window
   // element around it is what these tests care about.
