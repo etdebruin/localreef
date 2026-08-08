@@ -45,6 +45,19 @@ console.error('boom: could not find module "nope"')
 process.exit(1)
 `
 
+// Reports the key it was (or was not) handed, so the tests can ask the child
+// itself rather than trusting whatever object we composed for spawn().
+const ECHOES_KEY = `
+const http = require('http')
+const s = http.createServer((_, res) => res.end(process.env.ANTHROPIC_API_KEY ?? 'ABSENT'))
+s.listen(process.env.PORT, '127.0.0.1', () => console.log('up'))
+`
+
+async function keySeenBy(state) {
+  const res = await fetch(`http://127.0.0.1:${state.port}/`)
+  return res.text()
+}
+
 test('supervisor', async (t) => {
   const dirs = []
   const supervisor = createSupervisor({ readyTimeoutMs: 15000 })
@@ -142,6 +155,53 @@ test('supervisor', async (t) => {
     await supervisor.ensureStarted(app)
     await supervisor.stop('stopme')
     assert.equal(supervisor.get('stopme').status, 'stopped')
+  })
+
+  await t.test('hands the configured key to an app that declared ai', async () => {
+    const sup = createSupervisor({
+      readyTimeoutMs: 15000,
+      resolveApiKey: async () => 'sk-from-settings',
+    })
+    const dir = await appDir('ai', { 'server.js': ECHOES_KEY })
+    dirs.push(dir)
+    try {
+      const state = await sup.ensureStarted({
+        id: 'wants-ai',
+        type: 'server',
+        dir,
+        run: 'node server.js',
+        permissions: ['ai'],
+      })
+      assert.equal(await keySeenBy(state), 'sk-from-settings')
+    } finally {
+      await sup.stopAll()
+    }
+  })
+
+  await t.test('an app that declared nothing never sees a key', async () => {
+    // Even when the desktop itself inherited one from a terminal launch.
+    process.env.ANTHROPIC_API_KEY = 'sk-leaked-from-shell'
+    try {
+      const sup = createSupervisor({
+        readyTimeoutMs: 15000,
+        resolveApiKey: async () => 'sk-from-settings',
+      })
+      const dir = await appDir('noai', { 'server.js': ECHOES_KEY })
+      dirs.push(dir)
+      try {
+        const state = await sup.ensureStarted({
+          id: 'no-ai',
+          type: 'server',
+          dir,
+          run: 'node server.js',
+        })
+        assert.equal(await keySeenBy(state), 'ABSENT')
+      } finally {
+        await sup.stopAll()
+      }
+    } finally {
+      delete process.env.ANTHROPIC_API_KEY
+    }
   })
 
   await t.test('emits state changes so the UI can follow along', async () => {

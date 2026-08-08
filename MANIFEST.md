@@ -131,12 +131,37 @@ answer.
 | Permission | Grants |
 |---|---|
 | `storage` | `reef.storage.*` — per-app persisted KV |
-| `ai` | `reef.ai.complete()` — model access through Local Reef's key, rate-limited |
+| `ai` | Model access through Local Reef's key. Server apps get `ANTHROPIC_API_KEY` in their environment; `reef.ai.complete()` (rate-limited) is planned for static apps. |
 | `notify` | `reef.notify()` |
+| `mic` | `getUserMedia({ audio })` — recording |
+| `camera` | `getUserMedia({ video })` |
 | `net:<host>` | Outbound fetch to that host. Repeat per host. `net:*` is allowed but always prompts. |
 | `shared` | Read/write the cross-app store (v1.5) |
 
 No permission is needed to talk to the app's own origin.
+
+`mic` and `camera` are not prompts Local Reef invents — they set the Permissions
+Policy on your app's frame. Leave them out and the browser denies the device
+before anyone is asked, so `getUserMedia` rejects with `NotAllowedError` and
+there is nothing the user can click to change it. An app that records needs:
+
+```json
+{ "permissions": ["mic"] }
+```
+
+macOS still gates the app bundle itself, so the first recording raises the
+system microphone prompt for Local Reef.
+
+`ai` works the same way for server apps: declare it and the spawned process
+gets `ANTHROPIC_API_KEY` — the key from Settings, falling back to Local Reef's
+own environment. Leave it out and the variable is stripped, even when Local
+Reef was launched from a terminal that had one. The key in Settings wins so a
+key pasted there reaches apps launched from the Dock, where there is no shell
+environment at all; it takes effect the next time the app's server starts.
+
+```json
+{ "permissions": ["ai"] }
+```
 
 ---
 

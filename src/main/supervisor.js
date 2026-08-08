@@ -16,6 +16,7 @@ import os from 'node:os'
 
 import { PATH_MARKER, parseShellPath, withFallbacks } from '../core/shell-path.js'
 
+import { withAiGrant } from '../core/policy.js'
 import { sniffPort } from '../core/probe.js'
 
 const MAX_LOG_LINES = 200
@@ -99,7 +100,13 @@ function canConnect(host, port, timeoutMs = 500) {
   })
 }
 
-export function createSupervisor({ onChange = () => {}, readyTimeoutMs = 30000 } = {}) {
+export function createSupervisor({
+  onChange = () => {},
+  readyTimeoutMs = 30000,
+  // Asked at spawn time, not construction — a key pasted into Settings has to
+  // reach the next app started without restarting the desktop.
+  resolveApiKey = async () => null,
+} = {}) {
   /** id -> { status, port, logs, proc, pending } */
   const states = new Map()
 
@@ -142,13 +149,22 @@ export function createSupervisor({ onChange = () => {}, readyTimeoutMs = 30000 }
       // port — so every relaunch would leak a listener.
       detached: true,
       env: {
-        ...process.env,
-        PATH: await userPath(),
-        PORT: String(assignedPort),
-        HOST: '127.0.0.1',
-        REEF: '1',
-        REEF_APP_ID: app.id,
-        ...(app.dataDir ? { REEF_DATA_DIR: app.dataDir } : {}),
+        // AI access is a manifest permission: `ai` injects the resolved key,
+        // absent strips even an inherited one. The app's own `env` still wins —
+        // an explicit manifest value is the most deliberate declaration there is.
+        ...withAiGrant(
+          {
+            ...process.env,
+            PATH: await userPath(),
+            PORT: String(assignedPort),
+            HOST: '127.0.0.1',
+            REEF: '1',
+            REEF_APP_ID: app.id,
+            ...(app.dataDir ? { REEF_DATA_DIR: app.dataDir } : {}),
+          },
+          app.permissions,
+          await resolveApiKey(),
+        ),
         ...(app.env ?? {}),
       },
     })

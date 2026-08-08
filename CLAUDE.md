@@ -6,13 +6,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 npm start                  # launch the desktop (Electron)
-npm test                   # 225 unit + integration tests
+npm test                   # 266 unit + integration tests
 npm run lint
 npm run test:electron      # iframe auth, needs a real Electron GUI
 npm run test:electron:ui   # dock/window/settings via real Chromium input events
 npm run test:electron:ws   # browser-initiated WebSocket from an app iframe
+npm run test:electron:media # mic/camera Permissions Policy on an app iframe
 npm run test:vite          # real Vite through the gateway, incl. live HMR
 npm run shot               # screenshot the running app into .shots/
+npm run install:mac        # rebuild Local Reef.app into /Applications, if stale
 ```
 
 **You can see the app — use it.** `npm run shot` drives the real desktop over
@@ -122,6 +124,27 @@ Children spawn `detached: true` and are signalled as a group.
 proxy it" — any language. `node` is a legacy alias normalised in
 `manifest.js`; don't reintroduce Node-specific assumptions.
 
+**`npm start` and the app in the Dock are different code.** `/Applications/Local
+Reef.app` is a packaged copy of `src/`, so a fix verified from source is still
+absent from the Dock until the bundle is rebuilt — which already cost one full
+round of "still broken after restart" on the microphone bug. `npm run
+install:mac` rebuilds and replaces it, and exits silently in ~0.2s when nothing
+under `src/` or `apps/` has changed. A Stop hook in `.claude/settings.local.json`
+runs it automatically. When verifying anything a user will hit from the Dock,
+drive the packaged binary: every harness here takes `REEF_APP_BIN`.
+
+**A framed app has no microphone unless the frame says so.** Permissions Policy
+defaults `microphone` and `camera` to `self` — the *parent's* origin — so an app
+on `*.reef.localhost` inside the `file://` renderer is denied the device before
+any prompt exists. `getUserMedia` rejects with `NotAllowedError: Permission
+denied` and no amount of clicking "allow" helps; it looks like a macOS or
+gateway problem and is neither. `src/core/policy.js` turns the manifest's `mic`
+and `camera` into the iframe's `allow` attribute *and* into Electron's
+permission-request answer — both gates have to open.
+`test/electron/iframe-media.mjs` guards it; run it with `DECLARE=0` to watch an
+undeclared app lose the feature. Asserting the attribute is not enough — the
+test asks the frame itself via `document.featurePolicy.allowsFeature`.
+
 **Control characters do not survive being written into source.** A literal ESC
 or NUL gets mangled. Build them with `String.fromCharCode` (see
 `src/core/probe.js` and the null-byte case in `test/paths.test.js`).
@@ -145,6 +168,10 @@ plain suite structurally cannot**, and two shipped bugs prove it:
   drives the gateway from Node and sets the auth header on the handshake by
   hand, so all of them proved the gateway *relays* an authorised upgrade and
   none proved a browser ever sends one. It did not.
+- `test:electron:media` asks a real framed page what Permissions Policy grants
+  it. Nothing in Node can answer that: the policy is applied by the browser to
+  a cross-origin frame, and the iframe served fine over HTTP the whole time the
+  microphone was silently denied.
 
 The pattern behind all four: **assert the effect a user sees, not the mechanism
 you just wrote.** Minimize shipped broken because its test asserted

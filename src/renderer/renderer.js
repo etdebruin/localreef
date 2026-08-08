@@ -391,7 +391,12 @@ async function openApp(app) {
     return
   }
 
-  win.body.replaceChildren(h('iframe', { src: result.url, title: app.name }))
+  // `allow` comes from main, derived from the app's manifest. Without it
+  // Permissions Policy denies the frame the microphone and camera outright —
+  // getUserMedia rejects before the user is ever asked.
+  win.body.replaceChildren(
+    h('iframe', { src: result.url, title: app.name, allow: result.allow ?? '' }),
+  )
 }
 
 // ------------------------------------------------------------ ⌘K palette

@@ -6,7 +6,7 @@
  * renderer a URL per app.
  */
 
-import { app, BrowserWindow, dialog, ipcMain, session, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, session, shell, systemPreferences } from 'electron'
 import crypto from 'node:crypto'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -18,6 +18,7 @@ import { createLinkStore } from '../core/links.js'
 import { createSettingsStore, resolveApiKey } from '../core/settings.js'
 import { readIconImage, isImageIcon, initialsFor, hueFor } from '../core/icon.js'
 import { BACKGROUNDS, resolveBackground } from '../core/backgrounds.js'
+import { allowsMedia, framePolicy } from '../core/policy.js'
 import { createSupervisor } from './supervisor.js'
 import { createGateway } from '../gateway/index.js'
 import { AUTH_PARAM, AUTH_HEADER } from '../gateway/auth.js'
@@ -50,6 +51,9 @@ const supervisor = createSupervisor({
   onChange: (id, state) => {
     mainWindow?.webContents.send('apps:state', { id, ...state })
   },
+  // Read at spawn time so a key pasted into Settings reaches the next app
+  // started, no relaunch. Apps only see it if their manifest declares `ai`.
+  resolveApiKey: async () => resolveApiKey(await settings.read()),
 })
 
 /** Curated directories: bundled samples, plus whatever ⌘K has generated. */
@@ -211,6 +215,53 @@ app.whenReady().then(async () => {
     },
   )
 
+  // The second gate on device access. The iframe's `allow` attribute only
+  // stops Permissions Policy from denying the frame outright; Chromium still
+  // raises a permission request, and without a handler Electron answers it
+  // for us. Answer it from the manifest instead, so an app reaches the
+  // microphone only if it said it would.
+  const appIdFor = (url) => {
+    try {
+      const { hostname } = new URL(url)
+      return hostname.endsWith('.reef.localhost') ? hostname.slice(0, -'.reef.localhost'.length) : null
+    } catch {
+      return null
+    }
+  }
+
+  const declaredBy = (url) => apps.get(appIdFor(url) ?? '')?.permissions ?? []
+
+  // macOS gates the *bundle*, separately from the page, and the grant is per
+  // bundle id — a dev run and Local Reef.app are two different answers as far
+  // as the OS is concerned. Ask explicitly rather than hoping Chromium raises
+  // the prompt for us. A previous "Don't Allow" is remembered by the system
+  // and only System Settings › Privacy can undo it.
+  const askMacOS = async (mediaTypes) => {
+    if (process.platform !== 'darwin') return true
+    for (const type of mediaTypes) {
+      const device = type === 'audio' ? 'microphone' : 'camera'
+      if (!(await systemPreferences.askForMediaAccess(device))) return false
+    }
+    return true
+  }
+
+  session.defaultSession.setPermissionRequestHandler(
+    async (contents, permission, callback, details) => {
+      const url = details?.requestingUrl ?? contents?.getURL() ?? ''
+      const mediaTypes = details?.mediaTypes ?? []
+      if (permission !== 'media' || !allowsMedia(declaredBy(url), mediaTypes)) {
+        return callback(false)
+      }
+      callback(await askMacOS(mediaTypes))
+    },
+  )
+
+  // The synchronous path: enumerateDevices() labels and permissions.query()
+  // consult this one rather than raising a request.
+  session.defaultSession.setPermissionCheckHandler((_contents, permission, requestingOrigin) =>
+    permission === 'media' && framePolicy(declaredBy(requestingOrigin ?? '')) !== '',
+  )
+
   gateway = createGateway({ token: TOKEN, lookup: (id) => lookupForGateway(id) })
   await gateway.listen(0)
 
@@ -253,7 +304,15 @@ ipcMain.handle('apps:launch', async (_event, id) => {
     return { ok: false, error: state.error ?? 'Failed to start', logs: state.logs }
   }
 
-  return { ok: true, url: urlFor(id, { withToken: true }), name: record.name, icon: record.icon }
+  return {
+    ok: true,
+    url: urlFor(id, { withToken: true }),
+    name: record.name,
+    icon: record.icon,
+    // Permissions Policy for the frame. Main decides it, not the renderer, so
+    // the manifest is the only thing that can widen an app's device access.
+    allow: framePolicy(record.permissions),
+  }
 })
 
 ipcMain.handle('apps:stop', async (_event, id) => {
