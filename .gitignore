@@ -8,6 +8,10 @@ apps/*/.venv/
 *.log
 .DS_Store
 
+# Personal Claude Code settings. The Stop hook in here installs to
+# /Applications, which is this machine's choice, not the project's.
+.claude/settings.local.json
+
 # Local overrides; the committed defaults are in package.json / eslint.config.js
 .env
 .env.local
