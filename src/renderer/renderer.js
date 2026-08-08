@@ -114,10 +114,22 @@ function syncDock() {
 
 // -------------------------------------------------------------- windows
 
+/**
+ * Raise a window and mark it focused.
+ *
+ * z-order alone was the whole focus model, which meant nothing on screen said
+ * which window your keystrokes were going to. The class drives the chrome:
+ * unfocused windows lose their shadow depth, their title dims, and the
+ * traffic-light dots drain of colour.
+ */
 function focusWindow(id) {
   const win = openWindows.get(id)
   if (!win) return
+
   win.el.style.zIndex = String(++topZ)
+  for (const [otherId, other] of openWindows) {
+    other.el.classList.toggle('focused', otherId === id)
+  }
 }
 
 function closeWindow(id) {
@@ -128,6 +140,15 @@ function closeWindow(id) {
   // Static apps have no process; stopping a server app frees it immediately
   // rather than waiting out keepAlive, which is the right call for M1.
   if (win.app.type && win.app.type !== 'static') window.reef.stop(id)
+
+  // Hand focus to whatever is now highest, so closing the front window does
+  // not leave every remaining one looking inactive.
+  const next = [...openWindows.entries()]
+    .filter(([, other]) => !other.minimized)
+    .sort((a, b) => Number(a[1].el.style.zIndex) - Number(b[1].el.style.zIndex))
+    .pop()
+  if (next) focusWindow(next[0])
+
   syncDock()
 }
 
@@ -143,6 +164,7 @@ function minimizeWindow(id) {
   if (!win || win.minimized) return
   win.minimized = true
   win.el.hidden = true
+  win.el.classList.remove('focused')
   syncDock()
 }
 
@@ -330,6 +352,11 @@ async function openApp(app) {
 
   const win = makeWindow(app)
   openWindows.set(app.id, { ...win, app, minimized: false })
+
+  // After the map entry exists, not inside makeWindow: focusWindow walks
+  // openWindows to clear the class off the others, so a window focused before
+  // it was registered would mark nothing.
+  focusWindow(app.id)
   syncDock()
 
   if (app.status === 'broken') {

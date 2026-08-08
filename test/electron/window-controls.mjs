@@ -226,6 +226,23 @@ app.whenReady().then(async () => {
     JSON.stringify(titleTile),
   )
 
+  // A window you just opened is the focused one, and the chrome has to say so.
+  const focus = await js(`(() => {
+    const w = document.querySelector('.window')
+    if (!w) return null
+    const dot = w.querySelector('.titlebar button.close')
+    return {
+      focused: w.classList.contains('focused'),
+      dotFilter: getComputedStyle(dot).filter,
+    }
+  })()`)
+  check('a newly opened window is focused', focus?.focused === true, JSON.stringify(focus))
+  check(
+    'focused chrome is not drained of colour',
+    focus?.dotFilter === 'none',
+    `filter=${focus?.dotFilter}`,
+  )
+
   // --- drag it by the titlebar ---
   const before = await js(`(() => { const w = document.querySelector('.window'); return { left: w.offsetLeft, top: w.offsetTop } })()`)
   const titlePoint = await centreOf('.window .titlebar .name')

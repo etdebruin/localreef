@@ -237,8 +237,15 @@ bind, so drags stopped working entirely, and it also routed `pointerup` away fro
 close button — which is why the X did nothing. A drag must additionally ignore
 `pointerdown` originating on a control inside the handle.
 
-**Focus.** Clicking into a cross-origin iframe doesn't tell the parent anything, so
-z-order can't update. Unfocused windows get a transparent click-catcher; the first
+**Focus is also a visual state, not only a z-index.** Raising a window used to be
+the entire focus model, which meant nothing on screen said which window your
+keystrokes were going to. The front window now carries a `focused` class: the
+others lose shadow depth, their title dims, and their traffic-light dots drain of
+colour. Closing the front window hands focus to whatever is now highest, so you
+never end up with a screen of windows that all look inactive.
+
+**Clicking into a cross-origin iframe doesn't tell the parent anything, so
+z-order can't update.** Unfocused windows get a transparent click-catcher; the first
 click focuses and removes it. Costs one click on an unfocused window — which is what
 Windows does anyway, and is acceptable.
 
