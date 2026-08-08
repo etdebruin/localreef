@@ -55,26 +55,27 @@ export function initialsFor(name) {
 }
 
 /**
- * Hue bands sampled off the wallpapers.
+ * The one arc worth avoiding: yellow, through olive, to grass green.
  *
- * Spreading the hash across the whole colour wheel put app icons on mustard
- * and olive, which read as accidental sitting next to a coral reef. These are
- * the colours the reef is actually made of, so a generated icon looks chosen.
+ * Spreading hues across the whole wheel put app icons on mustard, which reads
+ * as accidental next to a coral reef. The first fix was worse — four narrow
+ * bands of reef colour — because a 30-degree band cannot separate two apps,
+ * and `clock` and `underscore` came out nine degrees apart as two identical
+ * pink bubbles. Excluding one arc keeps 272 degrees to spread across, so
+ * icons stay on-palette *and* stay tellable apart, which is the whole point of
+ * colouring them by id.
  */
-const REEF_BANDS = [
-  [12, 46], // coral to orange
-  [330, 360], // pink to magenta
-  [172, 208], // teal to cyan
-  [232, 262], // deep water blue
-]
+const EXCLUDED_FROM = 62
+const EXCLUDED_TO = 150
+const USABLE = 360 - (EXCLUDED_TO - EXCLUDED_FROM)
 
 /**
- * A stable hue per app id, inside the reef palette.
+ * A stable hue per app id.
  *
- * FNV-1a: cheap, and it avalanches well enough that `app1` and `app2` land in
- * different bands rather than adjacent. Only the hue is derived — lightness
- * and chroma are fixed in CSS, so every generated bubble carries identical
- * visual weight and the set reads as one family.
+ * FNV-1a for the hash, then a golden-ratio stride across the usable arc so
+ * consecutive or similar ids land far apart rather than adjacent. Only the hue
+ * is derived — lightness and chroma are fixed in CSS, so every generated
+ * bubble carries identical visual weight and the set reads as one family.
  */
 export function hueFor(id) {
   const text = String(id ?? '')
@@ -86,14 +87,10 @@ export function hueFor(id) {
     hash = Math.imul(hash, 0x01000193) >>> 0
   }
 
-  const [low, high] = REEF_BANDS[hash % REEF_BANDS.length]
+  const position = Math.floor(((hash * 0.6180339887) % 1) * USABLE)
 
-  // Different bits pick the position within the band, so two ids landing in
-  // the same band still separate. The golden ratio spreads them evenly rather
-  // than clustering.
-  const offset = (((hash >>> 8) * 0.6180339887) % 1) * (high - low)
-
-  return Math.round(low + offset) % 360
+  // Positions below the gap map straight through; the rest step over it.
+  return position < EXCLUDED_FROM ? position : position + (EXCLUDED_TO - EXCLUDED_FROM)
 }
 
 /**

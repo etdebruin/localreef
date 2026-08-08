@@ -85,25 +85,35 @@ test('hueFor', async (t) => {
     assert.equal(new Set(hues).size, 4)
   })
 
-  await t.test('stays inside the reef palette', () => {
-    // Hues are drawn from bands sampled off the wallpapers — coral, pink,
-    // teal, deep blue. The full colour wheel put app icons on mustard and
-    // olive, which read as accidental next to a coral reef.
-    const inBand = (h) =>
-      (h >= 12 && h <= 46) || (h >= 330 && h <= 360) || (h >= 172 && h <= 208) || (h >= 232 && h <= 262)
-
-    const ids = ['notes', 'clock', 'chart', 'feed', 'underscore', 'timer', 'budget', 'inbox']
+  await t.test('avoids the yellow-to-grass-green arc', () => {
+    // That arc is where mustard and olive live, and they read as accidental
+    // next to a coral reef. Everything else on the wheel is fair game.
+    const ids = ['notes', 'clock', 'chart', 'feed', 'underscore', 'timer', 'budget', 'inbox', 'a', 'zz']
     for (const id of ids) {
       const hue = hueFor(id)
-      assert.ok(inBand(hue), `${id} -> ${hue} is outside the reef bands`)
+      assert.ok(hue < 62 || hue > 150, `${id} -> ${hue} is in the excluded arc`)
     }
   })
 
-  await t.test('uses more than one band across a realistic set', () => {
-    // Constraining the palette must not collapse it to a single colour.
-    const ids = ['notes', 'clock', 'chart', 'feed', 'underscore', 'timer', 'budget', 'inbox']
-    const bands = new Set(ids.map((id) => Math.floor(hueFor(id) / 40)))
-    assert.ok(bands.size >= 3, `only ${bands.size} distinct bands: ${ids.map(hueFor)}`)
+  await t.test('keeps the bundled apps visibly apart', () => {
+    // The property that actually matters, and the one an earlier version broke:
+    // it confined hues to four narrow bands, and clock and underscore came out
+    // 9 degrees apart — two identical pink bubbles in the dock.
+    //
+    // 30 degrees is calibrated against a screenshot rather than picked: at 38
+    // the closest pair reads as two distinct siblings, at 9 it reads as one
+    // colour. A per-id hash cannot *guarantee* separation without consulting
+    // the other apps, and making an icon change colour because you installed
+    // something else would be a worse bug than two similar pinks.
+    const hues = ['clock', 'notes', 'underscore'].map(hueFor)
+
+    for (let i = 0; i < hues.length; i += 1) {
+      for (let j = i + 1; j < hues.length; j += 1) {
+        const raw = Math.abs(hues[i] - hues[j])
+        const apart = Math.min(raw, 360 - raw)
+        assert.ok(apart >= 30, `hues ${hues[i]} and ${hues[j]} are only ${apart}deg apart`)
+      }
+    }
   })
 })
 
