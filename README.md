@@ -5,17 +5,29 @@ A shell for local apps. Click an icon, your app opens — no terminal, no
 
 Apps are addressed by identity, not URL: `notes`, never `localhost:5173`.
 
+![Local Reef running a linked Python project, with the dock along the bottom](./assets/screenshot.webp)
+
 ```
 npm install
 npm start
 ```
 
+### Or install it properly
+
+```
+npm run icon        # draw assets/icon.svg into build/icon.icns
+npm run build:mac   # → dist/Local Reef-darwin-arm64/Local Reef.app
+```
+
+Drag the `.app` to `/Applications` and keep it in your Dock. The build is
+unsigned, so macOS will quarantine a copy that arrives from anywhere else.
+
 Two sample apps ship in `apps/`:
 
 | App | Type | Proves |
 |---|---|---|
-| **Notes** 📝 | static | serves instantly off disk, no process at all; `localStorage` persists per app origin |
-| **Clock** ⏱ | node server | spawned on click, proxied through the gateway, live **WebSocket** frames |
+| **Notes** | static | serves instantly off disk, no process at all; `localStorage` persists per app origin |
+| **Clock** | node server | spawned on click, proxied through the gateway, live **WebSocket** frames |
 
 ---
 
@@ -34,7 +46,10 @@ Press **⌘K**, describe what you want, hit Enter:
 Takes roughly two minutes. The result is a single self-contained `index.html`
 with no build step and no install, so it opens the moment it exists.
 
-Needs `ANTHROPIC_API_KEY` in the environment. Generated apps are written to
+Needs an Anthropic API key — either `ANTHROPIC_API_KEY` in the environment, or
+one saved in Settings. The Settings route matters: launched from the Dock or
+Finder, a macOS app inherits no shell environment at all, so the variable is
+simply absent. Generated apps are written to
 `~/Library/Application Support/localreef/apps/`, never into this repo — so
 `apps/` stays yours.
 
@@ -63,12 +78,11 @@ Drag its folder onto the desktop. Nothing is copied — the folder stays where i
 is, so editing it in your editor edits what the desktop runs.
 
 Most projects need no configuration. One that does — a Python FastAPI app whose
-own entrypoint hardcodes a port — needs a four-line `reef.json` in its root:
+own entrypoint hardcodes a port — needs a three-line `reef.json` in its root:
 
 ```json
 {
   "name": "Underscore",
-  "icon": "🎚️",
   "type": "server",
   "run": "uv run uvicorn underscore.server:create_app --factory --host 127.0.0.1 --port $PORT --env-file .env"
 }
@@ -98,11 +112,16 @@ Add a `reef.json` only to override something. Every field is optional:
 ```json
 {
   "name": "Feed Reader",
-  "icon": "📡",
   "run": "node server.js",
   "keepAlive": -1
 }
 ```
+
+You do not need to supply an icon. Every app gets a glass bubble whose colour
+comes from its id, drawn from a palette sampled off the wallpapers, so a dock of
+them looks like one set. Supply `icon.png` if you have art. Emoji work too, but
+macOS renders them as detailed, mostly rectangular pictures and inside a sphere
+they read as a sticker — which is why nothing bundled here uses one.
 
 Full format: [MANIFEST.md](./MANIFEST.md). Architecture and the reasoning
 behind it: [DESIGN.md](./DESIGN.md).
@@ -119,6 +138,43 @@ REEF          "1"
 Bind to `HOST`, not `0.0.0.0`. If your framework ignores `PORT` — Vite does —
 Local Reef reads the port out of your server's startup output instead, so
 it works either way.
+
+---
+
+## Appearance
+
+Five wallpapers ship — two painted reefs and three CSS gradients — with a picker
+in Settings. **Each background carries its own scrim.** How much darkening a
+picture needs before UI text stays legible over it is a property of the picture:
+one is blinding at top centre exactly where the title sits, the gradients are
+already dark and need almost none. Adding one is a single entry in
+`src/core/backgrounds.js` plus, for an image, a file in `assets/backgrounds/`.
+
+The scrims are deliberately local — a strip at the top, a strip at the bottom, a
+soft vignette — rather than a blanket darkening. Washing out the whole picture to
+make one line of 12px text readable is a bad trade.
+
+There is no dock panel. A rounded rectangle over a painting is a rectangle over a
+painting, glass or not, so the icons float directly on the scene. App icons and
+shell controls are both bubbles, built the same way: tight specular high and
+left, bounce light opposite, bright rim, near-clear middle.
+
+---
+
+## Settings
+
+`userData/settings.json`, holding three things the app cannot work out for
+itself:
+
+| Setting | Why it exists |
+|---|---|
+| **Projects folder** | scanned for apps; **opt-in per app** via a `reef.json`, because a working directory is mostly libraries and forks, not apps |
+| **Anthropic API key** | a GUI launch inherits no shell environment, so `ANTHROPIC_API_KEY` is simply absent |
+| **Background** | the wallpaper |
+
+An empty `{}` is enough to opt a project into the scan. A configured key beats
+the environment; the environment stays the fallback. The key itself is never
+sent to the renderer — only whether one is set and where it came from.
 
 ---
 
@@ -148,14 +204,24 @@ and then never sent back.
 ## Development
 
 ```
-npm test                 # 225 tests, including end-to-end against the real samples
+npm test                 # 253 tests, including end-to-end against the real samples
 npm run lint
 npm run test:electron    # iframe auth in a real Electron window
 npm run test:electron:ui # dock/window/settings via real Chromium input events
 npm run test:electron:ws # a browser-initiated WebSocket from an app iframe
 npm run test:vite        # a real Vite dev server through the gateway, incl. HMR
 npm run shot             # screenshot the running app into .shots/
+npm run icon             # rebuild the app icon from assets/icon.svg
+npm run build:mac        # package Local Reef.app
 ```
+
+`npm run shot` drives the real app over the Chrome DevTools Protocol and has it
+photograph its own page, so it needs no screen-recording permission and no
+test-only code in `src/main`. `npm run shot -- dock settings` captures named
+states only. Point it at a packaged build with
+`REEF_APP_BIN="/Applications/Local Reef.app/Contents/MacOS/Local Reef"` — worth
+doing, because a GUI launch inherits no shell PATH and is a genuinely different
+code path from `npm start`.
 
 The Electron suites are separate because they need a real GUI — and they exist
 because the plain suite structurally cannot catch what they cover. It
