@@ -7,13 +7,17 @@
  * click-catcher, since a click landing inside an iframe never reaches us.
  */
 
-const iconsEl = document.getElementById('icons')
+const dockAppsEl = document.getElementById('dock-apps')
+const emptyEl = document.getElementById('empty')
 const windowsEl = document.getElementById('windows')
 const shieldEl = document.getElementById('shield')
 const refreshEl = document.getElementById('refresh')
 
-/** id -> { el, body, app } */
+/** id -> { el, body, app, minimized } */
 const openWindows = new Map()
+
+/** id -> dock button, so run state can be updated without a full re-render. */
+const dockButtons = new Map()
 let topZ = 10
 let cascade = 0
 
@@ -31,29 +35,56 @@ function glyphFor(app) {
   return app.name.slice(0, 1).toUpperCase()
 }
 
-// ---------------------------------------------------------------- icons
+// ----------------------------------------------------------------- dock
 
-async function renderIcons() {
+/**
+ * The dock is the only launcher — the canvas is window space, nothing else.
+ * Tiling every app across the desktop turned a screenful of emoji into
+ * something that read like a channel list; one row at the bottom keeps the
+ * icons small, in a fixed place, and out of the way of the windows.
+ */
+async function renderDock() {
   const apps = await window.desktop.listApps()
-  iconsEl.replaceChildren()
+  dockAppsEl.replaceChildren()
+  dockButtons.clear()
 
-  if (apps.length === 0) {
-    iconsEl.append(h('div', { id: 'empty', textContent: 'No apps found in apps/' }))
-    return
-  }
+  emptyEl.hidden = apps.length > 0
 
   for (const app of apps) {
     const button = h(
       'button',
-      { className: `icon${app.status === 'broken' ? ' broken' : ''}`, title: app.error ?? app.name },
+      {
+        className: `dock-app${app.status === 'broken' ? ' broken' : ''}`,
+        // No visible label — the dock stays compact and the name lives in the
+        // tooltip, the way a macOS dock does it.
+        title: app.error ? `${app.name} — ${app.error}` : app.name,
+      },
       h('span', { className: 'glyph', textContent: glyphFor(app) }),
-      h('span', { className: 'label', textContent: app.name }),
-      app.type && app.type !== 'static'
-        ? h('span', { className: 'badge', textContent: 'server' })
-        : null,
+      h('span', { className: 'dot' }),
     )
-    button.addEventListener('click', () => openApp(app))
-    iconsEl.append(button)
+
+    button.addEventListener('click', () => activate(app))
+    dockButtons.set(app.id, button)
+    dockAppsEl.append(button)
+  }
+
+  syncDock()
+}
+
+/** Click behaviour depends on what the app is already doing. */
+function activate(app) {
+  const win = openWindows.get(app.id)
+  if (!win) return openApp(app)
+  if (win.minimized) return restoreWindow(app.id)
+  focusWindow(app.id)
+}
+
+/** Reflect run state in the dock without rebuilding it. */
+function syncDock() {
+  for (const [id, el] of dockButtons) {
+    const win = openWindows.get(id)
+    el.classList.toggle('running', Boolean(win))
+    el.classList.toggle('minimized', Boolean(win?.minimized))
   }
 }
 
@@ -73,6 +104,31 @@ function closeWindow(id) {
   // Static apps have no process; stopping a server app frees it immediately
   // rather than waiting out keepAlive, which is the right call for M1.
   if (win.app.type && win.app.type !== 'static') window.desktop.stop(id)
+  syncDock()
+}
+
+/**
+ * Minimize hides the window; it does not stop the app.
+ *
+ * The iframe has to stay in the DOM — removing it would tear down the app's
+ * page and lose whatever state it holds, which is the opposite of what
+ * minimizing means. `hidden` keeps it alive and off screen.
+ */
+function minimizeWindow(id) {
+  const win = openWindows.get(id)
+  if (!win || win.minimized) return
+  win.minimized = true
+  win.el.hidden = true
+  syncDock()
+}
+
+function restoreWindow(id) {
+  const win = openWindows.get(id)
+  if (!win) return
+  win.minimized = false
+  win.el.hidden = false
+  focusWindow(id)
+  syncDock()
 }
 
 function makeWindow(app) {
@@ -87,9 +143,15 @@ function makeWindow(app) {
     h('span', { className: 'spacer' }),
   )
 
-  const close = h('button', { title: 'Close', textContent: '×' })
+  const minimize = h('button', { className: 'minimize', title: 'Minimize', textContent: '–' })
+  minimize.addEventListener('click', () => minimizeWindow(app.id))
+
+  // × quits the app, not just the window: for a server app it stops the
+  // process. Minimize is the way to put it away and keep it running.
+  const close = h('button', { className: 'close', title: 'Quit', textContent: '×' })
   close.addEventListener('click', () => closeWindow(app.id))
-  titlebar.append(close)
+
+  titlebar.append(minimize, close)
 
   const resize = h('div', { className: 'resize' })
   const el = h('div', { className: 'window' }, titlebar, body, resize)
@@ -243,7 +305,8 @@ async function openApp(app) {
   if (openWindows.has(app.id)) return focusWindow(app.id)
 
   const win = makeWindow(app)
-  openWindows.set(app.id, { ...win, app })
+  openWindows.set(app.id, { ...win, app, minimized: false })
+  syncDock()
 
   if (app.status === 'broken') {
     showState(
@@ -333,7 +396,7 @@ async function build() {
   }
 
   progressLine(`Built ${result.id}`, { icon: '✓' })
-  await renderIcons()
+  await renderDock()
 
   // Give the success line a beat to register before the app takes over.
   setTimeout(async () => {
@@ -429,7 +492,7 @@ desktopEl.addEventListener('drop', async (event) => {
   if (!paths.length) return
 
   const result = await window.desktop.link(paths)
-  await renderIcons()
+  await renderDock()
 
   if (result.errors?.length) {
     toast(result.errors[0].error, { error: true })
@@ -508,7 +571,7 @@ async function saveSettings() {
     return
   }
 
-  await renderIcons()
+  await renderDock()
   closeSettings()
 
   const found = result.apps.filter((a) => a.discovered).length
@@ -537,7 +600,7 @@ settingsEl.addEventListener('keydown', (event) => {
 
 // --------------------------------------------------------------- wiring
 
-refreshEl.addEventListener('click', renderIcons)
+refreshEl.addEventListener('click', renderDock)
 
 window.desktop.onState(({ id, status, error, logs }) => {
   const win = openWindows.get(id)
@@ -552,4 +615,4 @@ window.desktop.onState(({ id, status, error, logs }) => {
   }
 })
 
-renderIcons()
+renderDock()

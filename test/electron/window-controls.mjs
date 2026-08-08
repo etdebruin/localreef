@@ -23,6 +23,12 @@ function check(name, passed, detail = '') {
   console.log(`  ${passed ? '✅' : '❌'} ${name}${detail ? `  — ${detail}` : ''}`)
 }
 
+// Same reasoning as the js() guard: whatever happens, report and exit.
+process.on('unhandledRejection', (err) => {
+  console.log(`\n  ❌ harness crashed: ${err?.stack ?? err}`)
+  app.exit(1)
+})
+
 app.whenReady().then(async () => {
   const win = new BrowserWindow({
     width: 1100,
@@ -47,7 +53,12 @@ app.whenReady().then(async () => {
   await win.loadFile(path.join(projectRoot, 'src/renderer/index.html'))
   await wait(700)
 
-  const js = (code) => win.webContents.executeJavaScript(code)
+  // Never let a throwing probe abort the run. An exception in executeJavaScript
+  // rejects up through this async chain, app.exit() is never reached, and the
+  // harness sits there with a window open until something kills it — which
+  // reads as a hang rather than a failure.
+  const js = (code) =>
+    win.webContents.executeJavaScript(code).catch((err) => ({ __error: String(err.message ?? err) }))
 
   /** Centre of the first element matching `selector`, in page coordinates. */
   const centreOf = (selector) =>
@@ -65,13 +76,17 @@ app.whenReady().then(async () => {
     await wait(260)
   }
 
-  // --- open a window by clicking its icon ---
-  const iconPoint = await centreOf('.icon')
-  check('icon is rendered', Boolean(iconPoint))
+  // --- open a window from the dock ---
+  const iconPoint = await centreOf('.dock-app')
+  check('the app appears in the dock', Boolean(iconPoint))
   if (iconPoint) await clickAt(iconPoint)
 
   const openCount = await js(`document.querySelectorAll('.window').length`)
-  check('clicking the icon opens a window', openCount === 1, `windows=${openCount}`)
+  check('clicking the dock icon opens a window', openCount === 1, `windows=${openCount}`)
+
+  // Running apps are marked in the dock, the way macOS does it.
+  const runningDot = await js(`document.querySelector('.dock-app')?.classList.contains('running') ?? null`)
+  check('the dock marks the app as running', runningDot === true)
 
   // --- drag it by the titlebar ---
   const before = await js(`(() => { const w = document.querySelector('.window'); return { left: w.offsetLeft, top: w.offsetTop } })()`)
@@ -133,13 +148,57 @@ app.whenReady().then(async () => {
   const shieldHidden = await js(`document.getElementById('shield').hidden`)
   check('the drag shield is released afterwards', shieldHidden === true)
 
+  // --- minimize sends the window to the dock, not to oblivion ---
+  const minPoint = await centreOf('.window .titlebar button.minimize')
+  check('minimize button is present', Boolean(minPoint))
+  if (minPoint) await clickAt(minPoint)
+
+  const minimized = await js(`(() => {
+    const w = document.querySelector('.window')
+    return w ? { present: true, hidden: w.hidden } : { present: false }
+  })()`)
+  check(
+    'minimize hides the window without destroying it',
+    minimized.present === true && minimized.hidden === true,
+    JSON.stringify(minimized),
+  )
+
+  // The app is still running, so the dock must still say so — and say it is
+  // parked. Losing the window with no way back is the failure mode here.
+  const dockState = await js(`(() => {
+    const el = document.querySelector('.dock-app')
+    if (!el) return { running: null, min: null }
+    return { running: el.classList.contains('running'), min: el.classList.contains('minimized') }
+  })()`)
+  check(
+    'the dock shows it minimized and still running',
+    dockState.running === true && dockState.min === true,
+    JSON.stringify(dockState),
+  )
+
+  // --- clicking the dock icon brings it back ---
+  const restorePoint = await centreOf('.dock-app')
+  if (restorePoint) await clickAt(restorePoint)
+
+  const restored = await js(`(() => {
+    const w = document.querySelector('.window')
+    return w ? w.hidden : null
+  })()`)
+  check('clicking the dock icon restores it', restored === false, `hidden=${restored}`)
+
+  const stillOne = await js(`document.querySelectorAll('.window').length`)
+  check('restoring does not open a second window', stillOne === 1, `windows=${stillOne}`)
+
   // --- the actual bug: close via the X ---
-  const closePoint = await centreOf('.window .titlebar button')
+  const closePoint = await centreOf('.window .titlebar button.close')
   check('close button is present', Boolean(closePoint))
   if (closePoint) await clickAt(closePoint)
 
   const remaining = await js(`document.querySelectorAll('.window').length`)
   check('clicking X closes the window', remaining === 0, `windows=${remaining}`)
+
+  const stoppedDot = await js(`document.querySelector('.dock-app')?.classList.contains('running') ?? null`)
+  check('closing clears the running mark', stoppedDot === false)
 
   // --- settings: open, edit, save ---
   const settingsPoint = await centreOf('#open-settings')
