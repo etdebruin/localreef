@@ -17,6 +17,7 @@ import { scanApps, readApp } from '../core/registry.js'
 import { createLinkStore } from '../core/links.js'
 import { createSettingsStore, resolveApiKey } from '../core/settings.js'
 import { readIconImage, isImageIcon, initialsFor, hueFor } from '../core/icon.js'
+import { BACKGROUNDS, resolveBackground } from '../core/backgrounds.js'
 import { createSupervisor } from './supervisor.js'
 import { createGateway } from '../gateway/index.js'
 import { AUTH_PARAM, AUTH_HEADER } from '../gateway/auth.js'
@@ -273,6 +274,10 @@ ipcMain.handle('settings:get', async () => {
   const current = await settings.read()
   return {
     ...current,
+    // Resolved rather than raw: a stale id from an older release must not
+    // leave the canvas blank, and the renderer should not have to know that.
+    background: resolveBackground(current.backgroundId),
+    backgrounds: BACKGROUNDS,
     // Never ship the key itself back to the renderer — the UI only needs to
     // know whether one is set and where it came from.
     anthropicApiKey: null,

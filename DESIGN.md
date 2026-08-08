@@ -244,7 +244,12 @@ and a soft vignette so windows read as lifted off the scene rather than pasted o
 read brown. Translucent chrome has to look the same whatever is behind it, which
 matters more the moment there is more than one wallpaper.
 
-Swapping the image is one custom property, `--wallpaper`. A picker is not built.
+**Scrims belong to the background, not to the app.** Each entry in
+`src/core/backgrounds.js` carries its own `{ top, bottom, vignette }`. A single
+global value tuned for one picture washes out the next or fails to rescue it —
+`tranquil-reef` is blinding at top-centre where the title sits, the gradients are
+already dark and need almost nothing. Adding a background is one entry there plus,
+for an image, one file.
 
 **Pop-out.** Creates a `BrowserWindow` on the same origin, so `localStorage` and
 session state carry over intact. Pop-out *moves* the window rather than duplicating it —

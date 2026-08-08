@@ -349,6 +349,78 @@ app.whenReady().then(async () => {
   check('the API key field stays empty', keyValue === '', `value=${JSON.stringify(keyValue)}`)
   check('a saved key is signalled by placeholder', /saved/i.test(keyPlaceholder), keyPlaceholder)
 
+  // --- background picker ---
+  const picker = await js(`(() => {
+    const options = [...document.querySelectorAll('.bg-option')]
+    return {
+      count: options.length,
+      selected: options.filter((o) => o.classList.contains('selected')).length,
+      // A swatch with no background is a picker you cannot use.
+      swatchesPainted: options.every(
+        (o) => getComputedStyle(o.querySelector('.swatch')).backgroundImage !== 'none',
+      ),
+    }
+  })()`)
+  const names = await js(`(() => [...document.querySelectorAll('.bg-option .bg-name')].map((el) => {
+    const r = el.getBoundingClientRect()
+    return { text: el.textContent, w: Math.round(r.width), h: Math.round(r.height) }
+  }))()`)
+  check(
+    'each background is labelled with a visible name',
+    Array.isArray(names) && names.length === 4 && names.every((n) => n.text && n.w > 0 && n.h > 0),
+    JSON.stringify(names),
+  )
+
+  // Layout regression guard: the labels once rendered *outside* their section
+  // and sat on top of the next heading.
+  const overflow = await js(`(() => {
+    const field = document.getElementById('backgrounds').closest('.field')
+    const last = [...document.querySelectorAll('.bg-option')].pop()
+    if (!field || !last) return null
+    return {
+      fieldBottom: Math.round(field.getBoundingClientRect().bottom),
+      // The *label's* bottom, not the button's: the button's own box was the
+      // thing that was wrong, so measuring it proved nothing.
+      optionBottom: Math.round(last.querySelector('.bg-name').getBoundingClientRect().bottom),
+      optionH: Math.round(last.getBoundingClientRect().height),
+      swatchH: Math.round(last.querySelector('.swatch').getBoundingClientRect().height),
+      swatchW: Math.round(last.querySelector('.swatch').getBoundingClientRect().width),
+    }
+  })()`)
+  check(
+    'the picker fits inside its section',
+    overflow && overflow.optionBottom <= overflow.fieldBottom,
+    JSON.stringify(overflow),
+  )
+
+  check('the picker lists every background', picker?.count === 4, JSON.stringify(picker))
+  check('exactly one is selected', picker?.selected === 1, JSON.stringify(picker))
+  check('every swatch is painted', picker?.swatchesPainted === true, JSON.stringify(picker))
+
+  // Choosing the second one must repaint the canvas immediately, not on save.
+  const second = await js(`(() => {
+    const el = document.querySelectorAll('.bg-option')[1]
+    if (!el) return null
+    const r = el.getBoundingClientRect()
+    return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) }
+  })()`)
+  if (second) await clickAt(second)
+
+  const previewed = await js(`(() => {
+    const el = document.getElementById('canvas')
+    return { id: el.dataset.background, scrimTop: getComputedStyle(el).getPropertyValue('--scrim-top').trim() }
+  })()`)
+  check(
+    'choosing a background previews it on the canvas',
+    previewed?.id === 'deep',
+    JSON.stringify(previewed),
+  )
+  check(
+    'the chosen background brings its own scrim',
+    previewed?.scrimTop === '0.22',
+    JSON.stringify(previewed),
+  )
+
   // Type a new folder, then save via a real click.
   await js(`(() => {
     const el = document.getElementById('apps-folder')
@@ -368,6 +440,11 @@ app.whenReady().then(async () => {
   )
 
   // An untouched key field must not wipe the saved key.
+  check(
+    'saving sends the chosen background',
+    saved?.backgroundId === 'deep',
+    JSON.stringify(saved),
+  )
   check(
     'an untouched key field is not sent',
     saved && !('anthropicApiKey' in saved),

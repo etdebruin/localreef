@@ -6,6 +6,38 @@ const { contextBridge } = require('electron')
 // the test to read. Keep it here and hand it back through the bridge instead.
 let savedSettings = null
 
+// Mirrors src/core/backgrounds.js closely enough to exercise both kinds.
+const BACKGROUNDS = [
+  {
+    id: 'tranquil-reef',
+    name: 'Tranquil Reef',
+    kind: 'image',
+    file: 'tranquil-reef.webp',
+    scrim: { top: 0.66, bottom: 0.55, vignette: 0.36 },
+  },
+  {
+    id: 'deep',
+    name: 'Deep',
+    kind: 'gradient',
+    css: 'linear-gradient(to bottom, oklch(0.24 0.05 240), oklch(0.16 0.035 250))',
+    scrim: { top: 0.22, bottom: 0.2, vignette: 0.16 },
+  },
+  {
+    id: 'shallows',
+    name: 'Shallows',
+    kind: 'gradient',
+    css: 'linear-gradient(to bottom, oklch(0.4 0.07 210), oklch(0.24 0.05 225))',
+    scrim: { top: 0.4, bottom: 0.36, vignette: 0.28 },
+  },
+  {
+    id: 'dusk',
+    name: 'Dusk',
+    kind: 'gradient',
+    css: 'linear-gradient(to bottom, oklch(0.26 0.06 285), oklch(0.17 0.04 275))',
+    scrim: { top: 0.26, bottom: 0.24, vignette: 0.2 },
+  },
+]
+
 contextBridge.exposeInMainWorld('reef', {
   // Two apps so the tile modes are both exercised: one declaring an emoji,
   // one declaring nothing and falling back to a generated tile.
@@ -40,6 +72,8 @@ contextBridge.exposeInMainWorld('reef', {
   pathForFile: () => null,
 
   getSettings: async () => ({
+    background: BACKGROUNDS[0],
+    backgrounds: BACKGROUNDS,
     appsFolder: '/tmp/projects',
     // The real bridge never returns the key itself, only whether one exists.
     anthropicApiKey: null,

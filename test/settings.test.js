@@ -15,7 +15,7 @@ test('createSettingsStore', async (t) => {
     const dir = await scratch()
     const store = createSettingsStore(path.join(dir, 'settings.json'))
 
-    assert.deepEqual(await store.read(), { appsFolder: null, anthropicApiKey: null })
+    assert.deepEqual(await store.read(), { appsFolder: null, anthropicApiKey: null, backgroundId: null })
     await fs.rm(dir, { recursive: true, force: true })
   })
 
@@ -77,6 +77,7 @@ test('createSettingsStore', async (t) => {
     assert.deepEqual(await createSettingsStore(file).read(), {
       appsFolder: null,
       anthropicApiKey: null,
+      backgroundId: null,
     })
     await fs.rm(dir, { recursive: true, force: true })
   })

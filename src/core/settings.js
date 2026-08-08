@@ -18,7 +18,7 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 
-const DEFAULTS = { appsFolder: null, anthropicApiKey: null }
+const DEFAULTS = { appsFolder: null, anthropicApiKey: null, backgroundId: null }
 
 /** Fields we persist. Anything else in the file is dropped on write. */
 const KEYS = Object.keys(DEFAULTS)
@@ -40,6 +40,7 @@ function normalise(raw) {
   if (!raw || typeof raw !== 'object') return settings
 
   settings.anthropicApiKey = clean(raw.anthropicApiKey)
+  settings.backgroundId = clean(raw.backgroundId)
 
   const folder = clean(raw.appsFolder)
   settings.appsFolder = folder ? path.resolve(expandHome(folder)) : null

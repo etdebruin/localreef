@@ -422,6 +422,10 @@ async function build() {
   progressLine(`Built ${result.id}`, { icon: '✓' })
   await renderDock()
 
+// Paint the saved wallpaper. The CSS default covers the frame before this
+// resolves, so there is no flash of empty canvas.
+window.reef.getSettings().then((settings) => applyBackground(settings.background))
+
   // Give the success line a beat to register before the app takes over.
   setTimeout(async () => {
     paletteEl.hidden = true
@@ -525,9 +529,43 @@ canvasEl.addEventListener('drop', async (event) => {
   }
 })
 
+// ---------------------------------------------------------- wallpaper
+
+/**
+ * Paint a background onto the canvas.
+ *
+ * Image and gradient go into the same property, so the rest of the styling
+ * does not branch. The scrim opacities ride along as custom properties
+ * because they are tuned per picture — see src/core/backgrounds.js.
+ */
+function applyBackground(background) {
+  if (!background) return
+
+  canvasEl.style.backgroundImage =
+    background.kind === 'image'
+      ? `url('../../assets/backgrounds/${background.file}')`
+      : background.css
+
+  canvasEl.style.setProperty('--scrim-top', String(background.scrim.top))
+  canvasEl.style.setProperty('--scrim-bottom', String(background.scrim.bottom))
+  canvasEl.style.setProperty('--scrim-vignette', String(background.scrim.vignette))
+  canvasEl.dataset.background = background.id
+}
+
+/** The swatch shown in the picker is the background itself, scaled down. */
+function swatchFor(background) {
+  const el = h('span', { className: 'swatch' })
+  el.style.backgroundImage =
+    background.kind === 'image'
+      ? `url('../../assets/backgrounds/${background.file}')`
+      : background.css
+  return el
+}
+
 // ------------------------------------------------------------- settings
 
 const settingsEl = document.getElementById('settings')
+const backgroundsEl = document.getElementById('backgrounds')
 const appsFolderEl = document.getElementById('apps-folder')
 const appsFolderStatusEl = document.getElementById('apps-folder-status')
 const apiKeyEl = document.getElementById('api-key')
@@ -538,9 +576,42 @@ function setStatus(el, text, { on = false } = {}) {
   el.classList.toggle('on', on)
 }
 
+/** Chosen in the sheet but not yet saved. */
+let pendingBackgroundId = null
+
+function renderBackgroundPicker(backgrounds, selectedId) {
+  pendingBackgroundId = selectedId
+  backgroundsEl.replaceChildren()
+
+  for (const background of backgrounds) {
+    const button = h(
+      'button',
+      {
+        className: `bg-option${background.id === selectedId ? ' selected' : ''}`,
+        title: background.name,
+        type: 'button',
+      },
+      swatchFor(background),
+      h('span', { className: 'bg-name', textContent: background.name }),
+    )
+
+    button.addEventListener('click', () => {
+      pendingBackgroundId = background.id
+      for (const other of backgroundsEl.children) other.classList.remove('selected')
+      button.classList.add('selected')
+      // Apply straight away: choosing a wallpaper from a thumbnail is
+      // guesswork, and the canvas is right there behind the sheet.
+      applyBackground(background)
+    })
+
+    backgroundsEl.append(button)
+  }
+}
+
 async function openSettings() {
   const settings = await window.reef.getSettings()
 
+  renderBackgroundPicker(settings.backgrounds ?? [], settings.background?.id ?? null)
   appsFolderEl.value = settings.appsFolder ?? ''
 
   // The key itself never leaves the main process, so the field starts empty
@@ -579,12 +650,15 @@ async function countDiscovered(folder) {
   }
 }
 
-const closeSettings = () => {
+const closeSettings = async () => {
   settingsEl.hidden = true
+  // The preview applied live; closing without saving has to put it back.
+  const settings = await window.reef.getSettings()
+  applyBackground(settings.background)
 }
 
 async function saveSettings() {
-  const patch = { appsFolder: appsFolderEl.value }
+  const patch = { appsFolder: appsFolderEl.value, backgroundId: pendingBackgroundId }
 
   // An untouched field must not wipe a saved key, so only send what was typed.
   if (apiKeyEl.value.trim()) patch.anthropicApiKey = apiKeyEl.value
@@ -640,3 +714,7 @@ window.reef.onState(({ id, status, error, logs }) => {
 })
 
 renderDock()
+
+// Paint the saved wallpaper. The CSS default covers the frame before this
+// resolves, so there is no flash of bare canvas.
+window.reef.getSettings().then((settings) => applyBackground(settings.background))

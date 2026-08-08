@@ -20,6 +20,10 @@ the ledger.
   an API key stored in `userData`, so ⌘K works launched from Finder or the Dock.
 - **Dock and window controls.** Dock replaces canvas icons; minimize parks a
   window without stopping the app, × still quits it.
+- **Backgrounds.** Five wallpapers — two reef paintings and three CSS
+  gradients — with a picker in Settings. Each carries its own scrim, because
+  how much darkening a picture needs to stay legible under is a property of
+  the picture.
 - **Square app icons.** One geometry, three contents — supplied art, an emoji on
   a neutral tile, or a hue-tinted tile with initials. Closes the icon-design
   open question in DESIGN.md §4.
@@ -45,14 +49,6 @@ decision rather than just leave one unmade.
 the first screenshot showed emoji icons invisible on dark tiles, and the
 second showed the clock stuck on "disconnected — retrying", which turned out
 to be every app's WebSocket failing.)*
-
-- **One wallpaper, no picker.** `assets/backgrounds/tranquil-reef.webp` is
-  wired through a single `--wallpaper` custom property. Wanted: more images and
-  a way to choose, most naturally in Settings beside the projects folder. The
-  scrims in `#canvas::before` are tuned for this image's bright top-centre —
-  a very dark or very busy wallpaper may want different values, which is an
-  argument for shipping the scrim as part of each background rather than once
-  globally.
 
 - **No screenshot runs in CI.** `npm run shot` is manual, so a visual
   regression is still only caught by someone remembering to look.
