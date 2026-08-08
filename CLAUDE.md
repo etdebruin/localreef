@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 npm start                  # launch the desktop (Electron)
-npm test                   # 266 unit + integration tests
+npm test                   # 276 unit + integration tests
 npm run lint
 npm run test:electron      # iframe auth, needs a real Electron GUI
 npm run test:electron:ui   # dock/window/settings via real Chromium input events
