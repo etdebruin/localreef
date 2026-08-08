@@ -38,6 +38,7 @@ contextBridge.exposeInMainWorld('reef', {
 
   onState: (callback) => subscribe('apps:state', callback),
   onGenerating: (callback) => subscribe('apps:generating', callback),
+  onGenerated: (callback) => subscribe('apps:generated', callback),
   onFixing: (callback) => subscribe('apps:fixing', callback),
   onEditing: (callback) => subscribe('apps:editing', callback),
   onChanged: (callback) => subscribe('apps:changed', callback),

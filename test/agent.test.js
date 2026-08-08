@@ -193,6 +193,103 @@ test('createGenerator', async (t) => {
     assert.ok(events.some((e) => e.file === 'index.html'))
     await fs.rm(appsDir, { recursive: true, force: true })
   })
+
+  // The renderer keys every in-flight build by id — a dock tile, a palette
+  // feed — so an event without one is an event it cannot route.
+  await t.test('stamps the app id on events the agent itself emits', async () => {
+    const appsDir = await tmpDir()
+    const events = []
+
+    const runAgent = async ({ tools, onProgress }) => {
+      onProgress({ phase: 'thinking', tool: 'write_file' })
+      await toolMap(tools).write_file.run({ path: 'index.html', content: 'x' })
+      return { stop_reason: 'end_turn' }
+    }
+
+    const generator = createGenerator({ appsDir, runAgent })
+    const { id } = await generator.generate({
+      prompt: 'a tide chart',
+      onProgress: (event) => events.push(event),
+    })
+
+    assert.ok(events.length > 0)
+    for (const event of events) {
+      assert.equal(event.id, id, `event without id: ${JSON.stringify(event)}`)
+    }
+    await fs.rm(appsDir, { recursive: true, force: true })
+  })
+})
+
+test('createGenerator.start', async (t) => {
+  await t.test('yields the id while the build is still running', async () => {
+    const appsDir = await tmpDir()
+
+    let release
+    const gate = new Promise((r) => {
+      release = r
+    })
+    const runAgent = async ({ tools }) => {
+      await gate
+      await toolMap(tools).write_file.run({ path: 'index.html', content: 'x' })
+      return { stop_reason: 'end_turn' }
+    }
+
+    const generator = createGenerator({ appsDir, runAgent })
+    const { id, done } = generator.start({ prompt: 'a kelp forest cam' })
+
+    // The id must arrive before the agent has finished — that is the point.
+    let settled = false
+    done.then(() => {
+      settled = true
+    })
+    const appId = await id
+    assert.equal(appId, 'kelp-forest-cam')
+    assert.equal(settled, false, 'done settled before the id was even awaited')
+
+    release()
+    const result = await done
+    assert.equal(result.ok, true)
+    assert.equal(result.id, appId)
+    await fs.rm(appsDir, { recursive: true, force: true })
+  })
+
+  await t.test('a failed build still resolves both promises', async () => {
+    const appsDir = await tmpDir()
+    const runAgent = async () => {
+      throw new Error('socket died')
+    }
+
+    const generator = createGenerator({ appsDir, runAgent })
+    const { id, done } = generator.start({ prompt: 'doomed' })
+
+    assert.equal(typeof (await id), 'string')
+    const result = await done
+    assert.equal(result.ok, false)
+    assert.match(result.error, /socket died/)
+    await fs.rm(appsDir, { recursive: true, force: true })
+  })
+
+  await t.test('progress still flows to the caller', async () => {
+    const appsDir = await tmpDir()
+    const events = []
+
+    const runAgent = async ({ tools }) => {
+      await toolMap(tools).write_file.run({ path: 'index.html', content: 'x' })
+      return { stop_reason: 'end_turn' }
+    }
+
+    const generator = createGenerator({ appsDir, runAgent })
+    const { done } = generator.start({
+      prompt: 'a timer',
+      onProgress: (event) => events.push(event),
+    })
+    await done
+
+    const phases = events.map((e) => e.phase)
+    assert.ok(phases.includes('scaffolding'), phases.join(','))
+    assert.ok(phases.includes('done'), phases.join(','))
+    await fs.rm(appsDir, { recursive: true, force: true })
+  })
 })
 
 test('buildMessages', async (t) => {

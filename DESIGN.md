@@ -345,6 +345,16 @@ instant launch, trivially editable, tiny crash surface. Escalate to a Node serve
 when the app genuinely needs one (secrets, filesystem access, long-running work). This
 choice is what makes the demo *fast*, and speed is most of the magic.
 
+**A build is background work from the moment it has an id.** The
+`apps:generate` invoke resolves as soon as the folder has a name; progress
+streams on `apps:generating` and the outcome lands on `apps:generated` (after
+the registry refresh, so the renderer's next `listApps` sees the new app). The
+palette is never modal: esc walks away, a bubbling placeholder tile holds the
+build's place at the end of the dock, clicking it reopens the live feed, and a
+landing while the user is elsewhere announces itself with a toast instead of
+stealing focus by opening the window. Only a user who kept the palette open
+through the whole build gets the app opened for them — attention decides.
+
 No CDN — the CSP blocks external hosts and we want apps to work offline. The gateway
 serves a local vendor bundle on every app origin, so generated apps can
 `import React from '/__reef/vendor/react'`.

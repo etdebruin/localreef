@@ -69,12 +69,47 @@ function tileFor(app, className = 'tile') {
  * something that read like a channel list; one row at the bottom keeps the
  * icons small, in a fixed place, and out of the way of the windows.
  */
+/**
+ * id -> { el, prompt, status, lines } — ⌘K builds still in flight.
+ *
+ * Each one is a bubbling placeholder at the end of the dock: the build is
+ * real desktop state the user can walk away from and come back to, so it
+ * lives here with the dock, not inside the palette that started it.
+ */
+const pendingBuilds = new Map()
+
+function trackBuild(id, prompt) {
+  const build = {
+    prompt,
+    status: 'Designing the app…',
+    lines: [],
+    el: h(
+      'button',
+      { className: 'dock-app building', title: 'Designing the app…' },
+      h(
+        'span',
+        { className: 'tile tile--building' },
+        h('span', { className: 'tile-bubbles' }, h('i'), h('i'), h('i')),
+      ),
+      h('span', { className: 'dot' }),
+    ),
+  }
+
+  // The bubbles answer "is it still going?"; a click answers "what is it
+  // doing?" — it reopens the palette on this build's live feed.
+  build.el.addEventListener('click', () => watchBuild(id))
+  pendingBuilds.set(id, build)
+  dockAppsEl.append(build.el)
+  emptyEl.hidden = true
+  return build
+}
+
 async function renderDock() {
   const apps = await window.reef.listApps()
   dockAppsEl.replaceChildren()
   dockButtons.clear()
 
-  emptyEl.hidden = apps.length > 0
+  emptyEl.hidden = apps.length > 0 || pendingBuilds.size > 0
 
   for (const app of apps) {
     const button = h(
@@ -93,6 +128,9 @@ async function renderDock() {
     dockButtons.set(app.id, button)
     dockAppsEl.append(button)
   }
+
+  // Builds in flight keep their place through any dock rebuild.
+  for (const build of pendingBuilds.values()) dockAppsEl.append(build.el)
 
   syncDock()
 }
@@ -578,7 +616,19 @@ const promptEl = document.getElementById('prompt')
 const progressEl = document.getElementById('progress')
 const paletteHintEl = document.getElementById('palette-hint')
 const paletteEnterEl = document.getElementById('palette-enter')
+const paletteSubmitEl = document.getElementById('palette-submit')
+const paletteEscEl = document.getElementById('palette-esc-label')
+
+/**
+ * A build is background work from the moment it has an id. `generating` only
+ * covers the beat before that — one round trip to main — so the palette is
+ * never modal for the minutes the agent actually takes. `paletteBuildId` is
+ * which in-flight build the palette is narrating, if it is open at all, and
+ * `paletteStatusEl` is that narration's live last line.
+ */
 let generating = false
+let paletteBuildId = null
+let paletteStatusEl = null
 
 /**
  * 'build' or 'key'.
@@ -599,8 +649,20 @@ function setPaletteMode(mode) {
   promptEl.placeholder = needsKey ? 'sk-ant-…' : 'Describe an app to build…'
 }
 
+/**
+ * While the palette is watching a build, Enter has nothing to offer and esc
+ * does not abandon anything — say so in the foot.
+ */
+function setWatching(watching) {
+  paletteSubmitEl.hidden = watching
+  paletteEscEl.textContent = watching ? 'continue in background' : 'close'
+}
+
 async function openPalette() {
   paletteEl.hidden = false
+  paletteBuildId = null
+  paletteStatusEl = null
+  setWatching(false)
   progressEl.replaceChildren()
   promptEl.value = ''
   promptEl.disabled = false
@@ -611,6 +673,23 @@ async function openPalette() {
   const settings = await window.reef.getSettings()
   setPaletteMode(settings.hasApiKey ? 'build' : 'key')
   promptEl.focus()
+}
+
+/** Point the palette at a build in flight: replay its feed, then follow. */
+function watchBuild(id) {
+  const build = pendingBuilds.get(id)
+  if (!build) return
+
+  setPaletteMode('build')
+  paletteBuildId = id
+  paletteEl.hidden = false
+  promptEl.value = build.prompt
+  promptEl.disabled = true
+  progressEl.replaceChildren()
+  paletteStatusEl = null
+  for (const line of build.lines) progressLine(line.text, line)
+  paletteStatusEl = statusLine(build.status)
+  setWatching(true)
 }
 
 async function saveKeyFromPalette() {
@@ -634,8 +713,9 @@ async function saveKeyFromPalette() {
   promptEl.focus()
 }
 
+// Closing the palette never cancels anything: a build in flight keeps its
+// bubbling tile in the dock and reports back through onGenerated.
 function closePalette() {
-  if (generating) return
   paletteEl.hidden = true
 }
 
@@ -646,46 +726,144 @@ function progressLine(text, { icon = '', className = '' } = {}) {
     h('span', { className: 'tick', textContent: icon }),
     h('span', { textContent: text }),
   )
+  // The live status line stays last; finished lines slot in above it.
+  if (paletteStatusEl?.parentElement === progressEl) paletteStatusEl.before(line)
+  else progressEl.append(line)
+  return line
+}
+
+/** The feed's last line: what the agent is doing right now, bubbling. */
+function statusLine(text) {
+  const line = h(
+    'div',
+    { className: 'line' },
+    h('span', { className: 'bubbles' }, h('i'), h('i'), h('i')),
+    h('span', { className: 'status-text', textContent: text }),
+  )
   progressEl.append(line)
   return line
 }
 
 async function build() {
   const prompt = promptEl.value.trim()
-  if (!prompt || generating) return
+  if (!prompt || generating || promptEl.disabled) return
 
   generating = true
   promptEl.disabled = true
   progressEl.replaceChildren()
+  paletteStatusEl = statusLine('Designing the app…')
 
-  const pending = progressLine('Designing the app…', { icon: '▸' })
-
+  // Resolves as soon as the build has an id; the work itself carries on in
+  // main and reports back through onGenerating / onGenerated.
   const result = await window.reef.generate(prompt)
-  pending.remove()
   generating = false
-  promptEl.disabled = false
 
   if (!result.ok) {
-    progressLine(result.error ?? 'Generation failed', { icon: '×', className: 'err' })
-    promptEl.focus()
+    paletteStatusEl?.remove()
+    paletteStatusEl = null
+    promptEl.disabled = false
+    if (paletteEl.hidden) {
+      toast(result.error ?? 'Generation failed', { error: true })
+    } else {
+      progressLine(result.error ?? 'Generation failed', { icon: '×', className: 'err' })
+      promptEl.focus()
+    }
     return
   }
 
-  progressLine(`Built ${result.id}`, { icon: '✓' })
-  await renderDock()
-
-  // Give the success line a beat to register before the app takes over.
-  setTimeout(async () => {
-    paletteEl.hidden = true
-    const apps = await window.reef.listApps()
-    const created = apps.find((a) => a.id === result.id)
-    if (created) openApp(created)
-  }, 450)
+  trackBuild(result.id, prompt)
+  paletteBuildId = result.id
+  setWatching(true)
 }
 
-window.reef.onGenerating(({ phase, file }) => {
-  if (!generating) return
-  if (phase === 'writing') progressLine(`Writing ${file}`, { icon: '✓' })
+/**
+ * What the dock tooltip and the palette's live line say for each event. The
+ * 'thinking' tool names are the agent's own vocabulary; this is the
+ * translation into the user's.
+ */
+const TOOL_STATUS = {
+  write_file: 'Writing the app…',
+  read_file: 'Reading it back…',
+  list_files: 'Surveying the files…',
+}
+
+function buildStatus({ phase, tool }, current) {
+  if (phase === 'scaffolding') return 'Making a home for it…'
+  if (phase === 'thinking') return TOOL_STATUS[tool] ?? 'Designing the app…'
+  if (phase === 'done') return 'Surfacing…'
+  // 'writing' gets its own ✓ line; the live line keeps the current activity
+  // rather than echoing that line word for word.
+  return current
+}
+
+window.reef.onGenerating((event) => {
+  const build = pendingBuilds.get(event.id)
+  if (!build) return
+
+  build.status = buildStatus(event, build.status)
+  // The tooltip favours the last concrete thing; the live line, the activity.
+  build.el.title = event.phase === 'writing' ? `Wrote ${event.file}` : build.status
+  if (event.phase === 'writing') build.lines.push({ text: `Wrote ${event.file}`, icon: '✓' })
+
+  if (paletteBuildId !== event.id || paletteEl.hidden) return
+  if (event.phase === 'writing') progressLine(`Wrote ${event.file}`, { icon: '✓' })
+  const statusText = paletteStatusEl?.querySelector('.status-text')
+  if (statusText) statusText.textContent = build.status
+})
+
+window.reef.onGenerated(async (result) => {
+  // A terminal failure can arrive without an id; with a single build in
+  // flight there is no ambiguity about whose it is.
+  const id = result.id ?? (pendingBuilds.size === 1 ? [...pendingBuilds.keys()][0] : null)
+  const build = pendingBuilds.get(id)
+  if (build) {
+    build.el.remove()
+    pendingBuilds.delete(id)
+  }
+
+  const watching = paletteBuildId === id && !paletteEl.hidden
+  if (paletteBuildId === id) {
+    paletteBuildId = null
+    paletteStatusEl?.remove()
+    paletteStatusEl = null
+    setWatching(false)
+    promptEl.disabled = false
+  }
+
+  await renderDock()
+
+  if (!result.ok) {
+    if (watching) {
+      // The description is still in the box — rephrase and go again.
+      progressLine(result.error ?? 'Generation failed', { icon: '×', className: 'err' })
+      promptEl.focus()
+    } else {
+      toast(result.error ?? 'The build failed', { error: true })
+    }
+    return
+  }
+
+  // The new tile hatches in place of the bubbles.
+  const hatchling = dockButtons.get(id)
+  if (hatchling) {
+    hatchling.classList.add('hatched')
+    setTimeout(() => hatchling.classList.remove('hatched'), 1400)
+  }
+
+  const apps = await window.reef.listApps()
+  const created = apps.find((a) => a.id === id)
+
+  if (watching) {
+    // They stayed for the whole thing: open it, as ⌘K always has.
+    progressLine(`Built ${created?.name ?? id}`, { icon: '✓' })
+    setTimeout(() => {
+      closePalette()
+      if (created) openApp(created)
+    }, 450)
+  } else if (created) {
+    // They went off to do something else: announce, don't interrupt.
+    toast(`${created.name} is ready — it's in the dock`)
+  }
 })
 
 promptEl.addEventListener('keydown', (event) => {

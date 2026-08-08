@@ -292,6 +292,72 @@
         box-shadow: 0 3px 11px rgba(0,0,0,0.38), 0 0 0 2px var(--danger);
       }
 
+      /* --- A build in flight --------------------------------------------
+         While ⌘K works, its app-to-be holds a place at the end of the dock:
+         a deep-water bubble with smaller bubbles dancing inside it. The tile
+         bobs gently and sheds bubbles the whole time — the same escape the
+         other tiles do on hover, looped, so "working" reads in the dock's own
+         vocabulary. */
+      @keyframes building-bob {
+        0%, 100% { transform: translateY(0); }
+        50%      { transform: translateY(-3px); }
+      }
+      .dock-app.building { animation: building-bob 2200ms ease-in-out infinite; }
+      .dock-app.building::before { animation: bubble-escape 1400ms ease-out 200ms infinite; }
+      .dock-app.building::after  { animation: bubble-escape 1700ms ease-out 900ms infinite; }
+
+      .tile--building {
+        background: linear-gradient(160deg, oklch(0.45 0.09 230), oklch(0.3 0.07 250));
+      }
+
+      /* The dancers: three small bubbles rising inside the glass, staggered so
+         the loop never visibly repeats. */
+      @keyframes bubble-rise {
+        0%   { transform: translateY(0) scale(0.5); opacity: 0; }
+        20%  { opacity: 0.9; }
+        80%  { opacity: 0.55; }
+        100% { transform: translateY(-40px) scale(1.05); opacity: 0; }
+      }
+      .tile-bubbles { position: absolute; inset: 0; }
+      .tile-bubbles i {
+        position: absolute;
+        bottom: 4px;
+        border-radius: 50%;
+        background:
+          radial-gradient(circle at 34% 30%, rgba(255,255,255,0.95) 0%, transparent 34%),
+          radial-gradient(circle at 50% 50%, transparent 48%, rgba(255,255,255,0.65) 96%);
+        animation: bubble-rise 1600ms ease-in infinite;
+      }
+      .tile-bubbles i:nth-child(1) { left: 26%; width: 8px;  height: 8px; }
+      .tile-bubbles i:nth-child(2) { left: 48%; width: 11px; height: 11px; animation-delay: 550ms; animation-duration: 1900ms; }
+      .tile-bubbles i:nth-child(3) { left: 66%; width: 6px;  height: 6px; animation-delay: 1050ms; animation-duration: 1400ms; }
+
+      /* The moment it lands: the placeholder pops and the real tile surfaces
+         with the same wobble a disturbed bubble settles by. */
+      @keyframes hatch-pop {
+        0%   { transform: scale(0.4); opacity: 0.2; }
+        55%  { transform: scale(1.14); opacity: 1; }
+        78%  { transform: scale(0.96); }
+        100% { transform: scale(1); }
+      }
+      .dock-app.hatched .tile { animation: hatch-pop 520ms cubic-bezier(0.25, 0.9, 0.3, 1.1); }
+      .dock-app.hatched::before { animation: bubble-escape 1000ms ease-out 80ms; }
+      .dock-app.hatched::after  { animation: bubble-escape 1200ms ease-out 240ms; }
+
+      @media (prefers-reduced-motion: reduce) {
+        .dock-app.building,
+        .dock-app.building::before,
+        .dock-app.building::after,
+        .tile-bubbles i,
+        .dock-app.hatched .tile,
+        .dock-app.hatched::before,
+        .dock-app.hatched::after {
+          animation: none;
+        }
+        /* Still working, just quietly: one static bubble inside the glass. */
+        .tile-bubbles i:nth-child(2) { opacity: 0.7; bottom: 18px; }
+      }
+
       /* Titlebar copy of the same tile, so an app looks like itself in both
          places. */
       .tile-sm {
@@ -880,6 +946,36 @@
       #progress .line.err { color: var(--danger); }
       #progress .line .tick { color: #4ade80; }
 
+      /* The live line: what the agent is doing right now, marked by the same
+         bubbles as the dock tile so the two are visibly one process. */
+      @keyframes palette-bubble {
+        0%   { transform: translateY(0) scale(0.6); opacity: 0; }
+        25%  { opacity: 0.9; }
+        100% { transform: translateY(-10px) scale(1); opacity: 0; }
+      }
+      #progress .bubbles {
+        position: relative;
+        width: 14px; height: 14px;
+        flex: none;
+      }
+      #progress .bubbles i {
+        position: absolute;
+        bottom: 0;
+        border-radius: 50%;
+        border: 1px solid rgba(125, 211, 252, 0.9);
+        animation: palette-bubble 1300ms ease-in infinite;
+      }
+      #progress .bubbles i:nth-child(1) { left: 1px;  width: 4px; height: 4px; }
+      #progress .bubbles i:nth-child(2) { left: 6px;  width: 5px; height: 5px; animation-delay: 420ms; }
+      #progress .bubbles i:nth-child(3) { left: 11px; width: 3px; height: 3px; animation-delay: 840ms; }
+      @media (prefers-reduced-motion: reduce) {
+        #progress .bubbles i { animation: none; }
+        #progress .bubbles i:nth-child(2) { opacity: 0.8; bottom: 4px; }
+      }
+
+      #palette .foot .foot-group { display: flex; gap: 10px; align-items: center; }
+      #palette .foot .foot-group[hidden] { display: none; }
+
       /* Settings */
       #settings {
         position: absolute; inset: 0; z-index: 10000;
@@ -1041,8 +1137,10 @@
           />
           <div id="progress"></div>
           <div class="foot">
-            <kbd>↵</kbd><span id="palette-enter">build</span>
-            <kbd>esc</kbd><span>close</span>
+            <span class="foot-group" id="palette-submit">
+              <kbd>↵</kbd><span id="palette-enter">build</span>
+            </span>
+            <kbd>esc</kbd><span id="palette-esc-label">close</span>
           </div>
         </div>
       </div>

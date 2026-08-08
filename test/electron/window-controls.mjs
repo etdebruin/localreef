@@ -9,6 +9,7 @@
  * the titlebar capturing the pointer.
  */
 import { app, BrowserWindow } from 'electron'
+import fs from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -591,6 +592,145 @@ app.whenReady().then(async () => {
   win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' })
   await wait(250)
 
+  // --- a build runs in the background, as a bubbling tile in the dock ---
+  // The old palette was modal for the whole generation: esc refused to close
+  // it and the desktop was unusable for minutes. Now Enter hands the build to
+  // main and the palette becomes a live feed you can walk away from.
+  const windowsBefore = await js(`document.querySelectorAll('.window').length`)
+
+  if (paletteBtn) await clickAt(paletteBtn)
+  await wait(300)
+  await js(`document.getElementById('prompt').value = 'a tide clock for Santa Cruz'; true`)
+  win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Return' })
+  win.webContents.sendInputEvent({ type: 'char', keyCode: '\r' })
+  win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Return' })
+  await wait(400)
+
+  const midBuild = await js(`(() => {
+    const tile = document.querySelector('.dock-app.building')
+    const r = tile?.getBoundingClientRect()
+    const bubbles = tile ? getComputedStyle(tile.querySelector('.tile-bubbles i')).animationName : null
+    return {
+      tileVisible: Boolean(r && r.width > 0 && r.height > 0),
+      bubblesAnimated: bubbles,
+      paletteOpen: !document.getElementById('palette').hidden,
+      liveLine: document.querySelector('#progress .bubbles') !== null,
+      submitHidden: document.getElementById('palette-submit').hidden,
+      escLabel: document.getElementById('palette-esc-label').textContent,
+      prompts: window.reef.__generateCalls(),
+    }
+  })()`)
+  check(
+    'Enter starts a build and the dock grows a bubbling tile',
+    midBuild?.tileVisible === true && midBuild.prompts?.length === 1,
+    JSON.stringify(midBuild),
+  )
+  check(
+    'the bubbles actually dance',
+    midBuild?.bubblesAnimated === 'bubble-rise',
+    `animation=${midBuild?.bubblesAnimated}`,
+  )
+  check(
+    'the palette stays open as a live feed',
+    midBuild?.paletteOpen === true && midBuild.liveLine === true,
+    JSON.stringify(midBuild),
+  )
+  check(
+    'the foot says esc continues in the background',
+    midBuild?.submitHidden === true && /background/.test(midBuild?.escLabel ?? ''),
+    JSON.stringify(midBuild),
+  )
+
+  // The feed narrates what the agent is doing, not just that it is busy.
+  await js(`window.reef.__emitGenerating({ phase: 'thinking', tool: 'write_file', id: 'tide-clock' }); true`)
+  await js(`window.reef.__emitGenerating({ phase: 'writing', file: 'index.html', id: 'tide-clock' }); true`)
+  await wait(150)
+
+  const narrated = await js(`(() => ({
+    status: document.querySelector('#progress .status-text')?.textContent,
+    wrote: [...document.querySelectorAll('#progress .line')].some((l) => l.textContent.includes('index.html')),
+    tooltip: document.querySelector('.dock-app.building')?.title,
+  }))()`)
+  check(
+    'the live line says what the agent just did',
+    narrated?.wrote === true && Boolean(narrated.status),
+    JSON.stringify(narrated),
+  )
+  check(
+    'the dock tile tooltip carries the same status',
+    (narrated?.tooltip ?? '').includes('index.html'),
+    JSON.stringify(narrated),
+  )
+
+  // Photograph the building state — this is the moment the feature exists for.
+  const shotDir = path.join(projectRoot, '.shots')
+  await fs.mkdir(shotDir, { recursive: true })
+  const image = await win.webContents.capturePage()
+  await fs.writeFile(path.join(shotDir, 'building-state.png'), image.toPNG())
+
+  // esc walks away without killing the build.
+  win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' })
+  win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' })
+  await wait(250)
+
+  const afterEsc = await js(`(() => ({
+    paletteClosed: document.getElementById('palette').hidden,
+    stillBuilding: document.querySelector('.dock-app.building') !== null,
+  }))()`)
+  check(
+    'escape closes the palette while the build continues',
+    afterEsc?.paletteClosed === true && afterEsc.stillBuilding === true,
+    JSON.stringify(afterEsc),
+  )
+
+  // Clicking the bubbles reopens the narration, feed replayed.
+  const buildingTile = await centreOf('.dock-app.building')
+  if (buildingTile) await clickAt(buildingTile)
+  await wait(250)
+
+  const reopened = await js(`(() => ({
+    open: !document.getElementById('palette').hidden,
+    prompt: document.getElementById('prompt').value,
+    locked: document.getElementById('prompt').disabled,
+    replayed: [...document.querySelectorAll('#progress .line')].some((l) => l.textContent.includes('index.html')),
+  }))()`)
+  check(
+    'clicking the bubbling tile reopens the live feed',
+    reopened?.open === true && reopened.replayed === true && reopened.locked === true,
+    JSON.stringify(reopened),
+  )
+  check(
+    'the feed shows what is being built',
+    reopened?.prompt === 'a tide clock for Santa Cruz',
+    JSON.stringify(reopened),
+  )
+
+  // Walk away again, then let the build land: it must hatch quietly.
+  win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' })
+  win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' })
+  await wait(200)
+  await js(`window.reef.__emitGenerated({ ok: true, id: 'tide-clock', files: ['index.html'] }); true`)
+  await wait(600)
+
+  const landed = await js(`(() => {
+    const buttons = [...document.querySelectorAll('.dock-app')]
+    return {
+      building: document.querySelector('.dock-app.building') !== null,
+      hatched: buttons.some((b) => b.title === 'Tide Clock'),
+      windows: document.querySelectorAll('.window').length,
+      toast: [...document.querySelectorAll('.toast')].map((t) => t.textContent).join(' | '),
+    }
+  })()`)
+  check(
+    'the bubbles hatch into the real app tile',
+    landed?.building === false && landed.hatched === true,
+    JSON.stringify(landed),
+  )
+  check(
+    'a background landing announces itself without stealing focus',
+    landed?.windows === windowsBefore && /Tide Clock/.test(landed?.toast ?? ''),
+    JSON.stringify(landed),
+  )
 
   const failed = results.filter((r) => !r.passed)
   console.log(`\n${results.length - failed.length}/${results.length} passed`)

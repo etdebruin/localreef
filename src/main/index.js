@@ -459,6 +459,12 @@ ipcMain.handle('apps:reveal', async (_event, id) => {
 
 // Generated apps land in userData, never in the repo's apps/ folder — that one
 // holds the samples and anything the user is editing by hand.
+//
+// The invoke resolves as soon as the build has an id — a generation is minutes
+// long and holding the renderer's promise open for all of it would make the
+// palette modal. Progress streams over 'apps:generating' and the final result
+// lands on 'apps:generated', after the registry already knows the new app, so
+// the renderer's listApps on receipt sees it.
 ipcMain.handle('apps:generate', async (_event, prompt) => {
   if (!String(prompt ?? '').trim()) return { ok: false, error: 'Describe what to build.' }
 
@@ -473,13 +479,26 @@ ipcMain.handle('apps:generate', async (_event, prompt) => {
     runAgent: createClaudeRunner({ apiKey, model: MODELS.generate }),
   })
 
-  const result = await generator.generate({
+  const { id, done } = generator.start({
     prompt,
     onProgress: (progress) => mainWindow?.webContents.send('apps:generating', progress),
   })
 
-  if (result.ok) await refreshApps()
-  return result
+  done.then(
+    async (result) => {
+      if (result.ok) await refreshApps()
+      mainWindow?.webContents.send('apps:generated', result)
+    },
+    // generate never rejects today; this keeps a future regression from
+    // leaving the renderer with a bubble that never pops.
+    (err) => mainWindow?.webContents.send('apps:generated', { ok: false, error: String(err?.message ?? err) }),
+  )
+
+  try {
+    return { ok: true, pending: true, id: await id }
+  } catch (err) {
+    return { ok: false, error: String(err?.message ?? err) }
+  }
 })
 
 ipcMain.handle('apps:fix', async (_event, id) => {

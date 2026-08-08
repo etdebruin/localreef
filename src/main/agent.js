@@ -213,7 +213,15 @@ export function createGenerator({ appsDir, runAgent }) {
 
     let final
     try {
-      final = await runAgent({ prompt, tools, dir, id, onProgress })
+      // The agent's own events ('thinking') do not know which build they
+      // belong to; stamp the id so a caller juggling several can route them.
+      final = await runAgent({
+        prompt,
+        tools,
+        dir,
+        id,
+        onProgress: (event) => onProgress({ ...event, id }),
+      })
     } catch (err) {
       return abandon(err?.message ?? String(err))
     }
@@ -235,7 +243,33 @@ export function createGenerator({ appsDir, runAgent }) {
     return { ok: true, id, dir, files: [...written] }
   }
 
-  return { generate }
+  /**
+   * Kick off a build and hand back its identity immediately.
+   *
+   * A generation is minutes long; nothing should have to wait on it just to
+   * learn which app is being built. `id` resolves as soon as the folder has a
+   * name — the 'scaffolding' event, first thing generate does — and `done`
+   * settles with the full result when the agent finishes. The race covers the
+   * one path where scaffolding never fires: generate rejecting outright.
+   */
+  function start({ prompt, onProgress = () => {} }) {
+    let announce
+    const announced = new Promise((resolve) => {
+      announce = resolve
+    })
+
+    const done = generate({
+      prompt,
+      onProgress: (event) => {
+        if (event.phase === 'scaffolding') announce(event.id)
+        onProgress(event)
+      },
+    })
+
+    return { id: Promise.race([announced, done.then((result) => result.id)]), done }
+  }
+
+  return { generate, start }
 }
 
 const FIX_SYSTEM_PROMPT = `You repair a broken app for Local Reef, a desktop shell that runs local apps in windows.
