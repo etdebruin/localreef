@@ -29,6 +29,10 @@
         --danger: #ff7b72;
         --radius: 12px;
         --titlebar: 36px;
+
+        /* Wallpaper. The one extension point for backgrounds: swap this and
+           everything else follows. Files live in assets/backgrounds/. */
+        --wallpaper: url('../../assets/backgrounds/tranquil-reef.webp');
       }
 
       * { box-sizing: border-box; }
@@ -46,22 +50,49 @@
       #canvas {
         position: relative;
         height: 100%;
+        /* The colour still matters: it shows for the frame before the image
+           decodes, and it is what the scrims blend toward. */
+        background-color: var(--bg);
+        background-image: var(--wallpaper);
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+      }
+
+      /* Legibility scrims.
+         Deliberately local rather than a blanket darkening — the picture is
+         the point, and washing the whole thing out to make one line of 12px
+         text readable is a bad trade. Two strips and a soft vignette: the top
+         because the title sits over the brightest part of the image, the
+         bottom to seat the dock, and the vignette so windows read as lifted
+         off the scene rather than pasted onto it. */
+      #canvas::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        z-index: 0;
+        pointer-events: none;
         background:
-          radial-gradient(1100px 700px at 78% -8%, #253048 0%, transparent 60%),
-          radial-gradient(900px 600px at 8% 108%, #1e2a3d 0%, transparent 55%),
-          var(--bg);
+          linear-gradient(to bottom, rgba(7, 11, 17, 0.66), rgba(7, 11, 17, 0.10) 110px, transparent 190px),
+          linear-gradient(to top, rgba(7, 11, 17, 0.55), transparent 220px),
+          radial-gradient(125% 105% at 50% 45%, transparent 42%, rgba(7, 11, 17, 0.36) 100%);
       }
 
       /* Drag region for the hidden-inset traffic lights. */
       #chrome {
+        position: relative;
+        z-index: 1;
         height: 34px;
         -webkit-app-region: drag;
         display: flex;
         align-items: center;
         justify-content: center;
-        color: var(--muted);
+        color: rgba(232, 235, 242, 0.72);
         font-size: 12px;
         letter-spacing: 0.04em;
+        /* Cheap insurance: the scrim handles the common case, this handles a
+           future wallpaper that is bright right where the title lands. */
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
       }
 
       /* Dock apps. The launcher lives here and nowhere else — the canvas is
@@ -329,9 +360,13 @@
         transform: translateX(-50%);
         display: flex; align-items: flex-end; gap: 6px;
         padding: 7px 9px;
-        background: rgba(27, 31, 42, 0.72);
-        backdrop-filter: blur(18px) saturate(1.4);
-        border: 1px solid rgba(255,255,255,0.09);
+        /* Cool and mostly opaque on purpose. An earlier saturate(1.4) pulled
+           the coral through the blur and the dock read brown — chrome must
+           look the same whatever the wallpaper is, which matters more once
+           there is more than one of them. */
+        background: rgba(17, 21, 30, 0.78);
+        backdrop-filter: blur(22px) saturate(0.85);
+        border: 1px solid rgba(255,255,255,0.10);
         border-radius: 18px;
         box-shadow: 0 12px 34px rgba(0,0,0,0.45);
         /* Above windows: the launcher has to stay reachable even with a window

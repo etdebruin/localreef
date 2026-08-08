@@ -46,6 +46,14 @@ the first screenshot showed emoji icons invisible on dark tiles, and the
 second showed the clock stuck on "disconnected — retrying", which turned out
 to be every app's WebSocket failing.)*
 
+- **One wallpaper, no picker.** `assets/backgrounds/tranquil-reef.webp` is
+  wired through a single `--wallpaper` custom property. Wanted: more images and
+  a way to choose, most naturally in Settings beside the projects folder. The
+  scrims in `#canvas::before` are tuned for this image's bright top-centre —
+  a very dark or very busy wallpaper may want different values, which is an
+  argument for shipping the scrim as part of each background rather than once
+  globally.
+
 - **No screenshot runs in CI.** `npm run shot` is manual, so a visual
   regression is still only caught by someone remembering to look.
 

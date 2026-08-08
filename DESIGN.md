@@ -230,6 +230,22 @@ z-order can't update. Unfocused windows get a transparent click-catcher; the fir
 click focuses and removes it. Costs one click on an unfocused window — which is what
 Windows does anyway, and is acceptable.
 
+### The wallpaper carries the aesthetic, the chrome must not move with it
+
+The canvas takes a full-bleed image. Two rules keep it from fighting the UI:
+
+**Scrims are local, not global.** Darkening the whole picture to make one line of
+12px text legible is a bad trade. Instead a strip at the top (where the title sits
+over the brightest part of the image), a strip at the bottom (to seat the dock),
+and a soft vignette so windows read as lifted off the scene rather than pasted on.
+
+**Chrome does not tint with the image.** The dock originally ran
+`backdrop-filter: saturate(1.4)`, which pulled coral through the blur and made it
+read brown. Translucent chrome has to look the same whatever is behind it, which
+matters more the moment there is more than one wallpaper.
+
+Swapping the image is one custom property, `--wallpaper`. A picker is not built.
+
 **Pop-out.** Creates a `BrowserWindow` on the same origin, so `localStorage` and
 session state carry over intact. Pop-out *moves* the window rather than duplicating it —
 one app, one live frame.

@@ -76,6 +76,31 @@ app.whenReady().then(async () => {
     await wait(260)
   }
 
+  // --- the wallpaper actually loads ---
+  // A wrong path or a CSP that blocks the asset both fail silently: the canvas
+  // just shows its fallback colour and nothing errors. So resolve the URL out
+  // of the computed style and then actually fetch it through an Image.
+  const wallpaper = await js(`(async () => {
+    const el = document.getElementById('canvas')
+    const bg = getComputedStyle(el).backgroundImage
+    const match = bg.match(/url\\("?([^")]+)"?\\)/)
+    if (!match) return { declared: false, bg }
+    const loaded = await new Promise((resolve) => {
+      const img = new Image()
+      img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight })
+      img.onerror = () => resolve(null)
+      img.src = match[1]
+    })
+    return { declared: true, file: match[1].split('/').pop(), loaded }
+  })()`)
+
+  check('the canvas declares a wallpaper', wallpaper?.declared === true, JSON.stringify(wallpaper))
+  check(
+    'the wallpaper image actually loads',
+    Boolean(wallpaper?.loaded?.w > 0),
+    JSON.stringify(wallpaper),
+  )
+
   // --- icons are square, uniform, and mode-appropriate ---
   const tiles = await js(`(() => [...document.querySelectorAll('.dock-app .tile')].map((el) => {
     const r = el.getBoundingClientRect()
