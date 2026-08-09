@@ -11,7 +11,7 @@
   "bugs": {
     "url": "https://github.com/everydev1618/localreef/issues"
   },
-  "license": "UNLICENSED",
+  "license": "MIT",
   "author": "Etienne de Bruin",
   "keywords": [
     "electron",
