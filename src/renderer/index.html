@@ -604,8 +604,11 @@
         background: rgba(255, 123, 114, 0.1);
         color: var(--danger);
       }
-      /* Same voice as the palette's progress line. */
-      .chat-progress { color: var(--muted); font-size: 11.5px; padding: 0 2px; }
+      /* Same voice as the palette's progress line — and the same bubbles. */
+      .chat-progress {
+        display: flex; align-items: center; gap: 8px;
+        color: var(--muted); font-size: 11.5px; padding: 0 2px;
+      }
       .chat-form {
         flex: 0 0 auto;
         display: flex;
@@ -995,30 +998,32 @@
       }
 
       /* The live line: what the agent is doing right now, marked by the same
-         bubbles as the dock tile so the two are visibly one process. */
+         bubbles as the dock tile so the two are visibly one process. Shared
+         with the edit chat's progress line, which is the same live line in a
+         different room. */
       @keyframes palette-bubble {
         0%   { transform: translateY(0) scale(0.6); opacity: 0; }
         25%  { opacity: 0.9; }
         100% { transform: translateY(-10px) scale(1); opacity: 0; }
       }
-      #progress .bubbles {
+      .bubbles {
         position: relative;
         width: 14px; height: 14px;
         flex: none;
       }
-      #progress .bubbles i {
+      .bubbles i {
         position: absolute;
         bottom: 0;
         border-radius: 50%;
         border: 1px solid rgba(125, 211, 252, 0.9);
         animation: palette-bubble 1300ms ease-in infinite;
       }
-      #progress .bubbles i:nth-child(1) { left: 1px;  width: 4px; height: 4px; }
-      #progress .bubbles i:nth-child(2) { left: 6px;  width: 5px; height: 5px; animation-delay: 420ms; }
-      #progress .bubbles i:nth-child(3) { left: 11px; width: 3px; height: 3px; animation-delay: 840ms; }
+      .bubbles i:nth-child(1) { left: 1px;  width: 4px; height: 4px; }
+      .bubbles i:nth-child(2) { left: 6px;  width: 5px; height: 5px; animation-delay: 420ms; }
+      .bubbles i:nth-child(3) { left: 11px; width: 3px; height: 3px; animation-delay: 840ms; }
       @media (prefers-reduced-motion: reduce) {
-        #progress .bubbles i { animation: none; }
-        #progress .bubbles i:nth-child(2) { opacity: 0.8; bottom: 4px; }
+        .bubbles i { animation: none; }
+        .bubbles i:nth-child(2) { opacity: 0.8; bottom: 4px; }
       }
 
       #palette .foot .foot-group { display: flex; gap: 10px; align-items: center; }

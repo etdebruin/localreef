@@ -615,7 +615,14 @@ function toggleEditPane(id) {
     input.disabled = true
     send.disabled = true
     log.append(bubble('user', message))
-    const progress = h('div', { className: 'chat-progress', textContent: 'Reading the app…' })
+    // Same anatomy as the palette's live line: bubbles say "still going",
+    // the text says what the agent is doing right now.
+    const progress = h(
+      'div',
+      { className: 'chat-progress' },
+      h('span', { className: 'bubbles' }, h('i'), h('i'), h('i')),
+      h('span', { className: 'status-text', textContent: 'Reading the app…' }),
+    )
     log.append(progress)
     log.scrollTop = log.scrollHeight
 
@@ -649,13 +656,27 @@ function closeEditPane(win) {
   win.el.style.width = `${Math.max(320, win.el.offsetWidth - 360)}px`
 }
 
+/**
+ * What the dock tooltip, the palette's live line, and the edit chat's progress
+ * line say for each event. The 'thinking' tool names are the agent's own
+ * vocabulary; this is the translation into the user's.
+ */
+const TOOL_STATUS = {
+  write_file: 'Writing the app…',
+  read_file: 'Reading it back…',
+  list_files: 'Surveying the files…',
+}
+
 // Progress for whichever window's turn is running — every event carries the
-// app id, so concurrent sessions cannot cross streams.
-window.reef.onEditing(({ id, phase, file }) => {
-  const line = openWindows.get(id)?.chat?.querySelector('.chat-progress')
-  if (!line) return
-  if (phase === 'thinking') line.textContent = 'Thinking…'
-  if (phase === 'writing') line.textContent = `Rewriting ${file}…`
+// app id, so concurrent sessions cannot cross streams. A turn is minutes
+// long, so the line follows the agent's activity rather than sitting on one
+// word; the bubbles beside it carry "still going" between events.
+window.reef.onEditing(({ id, phase, tool, file }) => {
+  const status = openWindows.get(id)?.chat?.querySelector('.chat-progress .status-text')
+  if (!status) return
+  if (phase === 'reading') status.textContent = 'Reading the app…'
+  if (phase === 'thinking') status.textContent = TOOL_STATUS[tool] ?? 'Thinking…'
+  if (phase === 'writing') status.textContent = `Rewriting ${file}…`
 })
 
 // A change on disk — from an edit turn or the user's own editor — reloads the
@@ -865,17 +886,6 @@ async function build() {
   trackBuild(result.id, prompt)
   paletteBuildId = result.id
   setWatching(true)
-}
-
-/**
- * What the dock tooltip and the palette's live line say for each event. The
- * 'thinking' tool names are the agent's own vocabulary; this is the
- * translation into the user's.
- */
-const TOOL_STATUS = {
-  write_file: 'Writing the app…',
-  read_file: 'Reading it back…',
-  list_files: 'Surveying the files…',
 }
 
 function buildStatus({ phase, tool }, current) {

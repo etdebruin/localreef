@@ -207,7 +207,11 @@ app.whenReady().then(async () => {
   const shot = await win.webContents.capturePage()
   await fs.writeFile(path.join(projectRoot, '.shots', 'edit-pane-glass.png'), shot.toPNG())
 
-  // --- a message round-trips through the stubbed bridge ---
+  // --- while the turn runs, the progress line bubbles and narrates ---
+  // A real turn takes minutes; a bare static "Thinking…" reads as stuck. The
+  // live line must carry the same bubbling animation as the palette and the
+  // dock tile, and must move with the agent's actual activity.
+  await js(`window.reef.__holdEdits()`)
   await js(`(() => {
     const input = document.querySelector('.chat-input')
     input.value = 'make the header bigger'
@@ -216,6 +220,58 @@ app.whenReady().then(async () => {
   const sendPoint = await centreOf('.chat-send')
   check('the send button is clickable', Boolean(sendPoint))
   if (sendPoint) await clickAt(sendPoint)
+  await wait(300)
+
+  const inFlight = await js(`(() => {
+    const line = document.querySelector('.chat-log .chat-progress')
+    if (!line) return null
+    const bubbles = line.querySelectorAll('.bubbles i')
+    const box = line.querySelector('.bubbles')?.getBoundingClientRect()
+    return {
+      bubbles: bubbles.length,
+      bubblesVisible: Boolean(box) && box.width > 0 && box.height > 0,
+      text: line.querySelector('.status-text')?.textContent ?? null,
+      animated: bubbles.length ? getComputedStyle(bubbles[0]).animationName !== 'none' : false,
+    }
+  })()`)
+  check(
+    'the in-flight progress line carries bubbles',
+    inFlight?.bubbles === 3 && inFlight.bubblesVisible === true,
+    JSON.stringify(inFlight),
+  )
+  check('the bubbles actually animate', inFlight?.animated === true, JSON.stringify(inFlight))
+  check(
+    'the line opens on reading the app',
+    inFlight?.text === 'Reading the app…',
+    JSON.stringify(inFlight),
+  )
+
+  // Progress events move the text — the palette's tool vocabulary, per phase.
+  const narrated = await js(`(async () => {
+    const textOf = () =>
+      document.querySelector('.chat-log .chat-progress .status-text')?.textContent ?? null
+    window.reef.__emitEditing({ id: 'doodle', phase: 'thinking', tool: 'read_file' })
+    const thinking = textOf()
+    window.reef.__emitEditing({ id: 'doodle', phase: 'writing', file: 'index.html' })
+    const writing = textOf()
+    return { thinking, writing }
+  })()`)
+  check(
+    "a 'thinking' event narrates the tool in play",
+    narrated?.thinking === 'Reading it back…',
+    JSON.stringify(narrated),
+  )
+  check(
+    "a 'writing' event names the file",
+    narrated?.writing === 'Rewriting index.html…',
+    JSON.stringify(narrated),
+  )
+
+  const midFlight = await win.webContents.capturePage()
+  await fs.writeFile(path.join(projectRoot, '.shots', 'edit-pane-progress.png'), midFlight.toPNG())
+
+  // --- a message round-trips through the stubbed bridge ---
+  await js(`window.reef.__releaseEdits()`)
   await wait(300)
 
   const thread = await js(`(() => {

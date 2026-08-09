@@ -94,8 +94,13 @@ const apps = [
 
 // The renderer's subscriptions, so a harness can fire lifecycle events at it
 // the way main does.
-const listeners = { generating: [], generated: [], changed: [] }
+const listeners = { generating: [], generated: [], changed: [], editing: [] }
 let generateCalls = []
+
+// While held, edit() parks its turns here so a harness can look at the chat's
+// in-flight state before letting the turn finish.
+let holdEdits = false
+const pendingEdits = []
 
 contextBridge.exposeInMainWorld('reef', {
   listApps: async () => apps,
@@ -142,7 +147,10 @@ contextBridge.exposeInMainWorld('reef', {
     for (const cb of listeners.generated) cb(payload)
   },
   fix: async () => ({ ok: false, error: 'stubbed' }),
-  edit: async ({ id } = {}) => ({ ok: true, id, files: ['index.html'], reply: 'Done.' }),
+  edit: async ({ id } = {}) => {
+    if (holdEdits) await new Promise((resolve) => pendingEdits.push(resolve))
+    return { ok: true, id, files: ['index.html'], reply: 'Done.' }
+  },
   link: async () => ({ ok: true, linked: 0, errors: [] }),
   unlink: async () => ({ ok: true }),
   pathForFile: () => null,
@@ -188,7 +196,10 @@ contextBridge.exposeInMainWorld('reef', {
     return () => {}
   },
   onFixing: () => () => {},
-  onEditing: () => () => {},
+  onEditing: (cb) => {
+    listeners.editing.push(cb)
+    return () => {}
+  },
   onChanged: (cb) => {
     listeners.changed.push(cb)
     return () => {}
@@ -197,5 +208,17 @@ contextBridge.exposeInMainWorld('reef', {
   // server-app edit restart, so a harness can assert the frame reloads.
   __emitChanged: (payload) => {
     for (const cb of listeners.changed) cb(payload)
+  },
+  // Fire an edit-progress event the way main relays them mid-turn, and hold or
+  // release the turn itself so the harness can assert the in-flight state.
+  __emitEditing: (payload) => {
+    for (const cb of listeners.editing) cb(payload)
+  },
+  __holdEdits: () => {
+    holdEdits = true
+  },
+  __releaseEdits: () => {
+    holdEdits = false
+    while (pendingEdits.length) pendingEdits.shift()()
   },
 })
