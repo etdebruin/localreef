@@ -20,10 +20,9 @@ import { slugify, uniqueId } from '../core/slug.js'
  *
  * `generate`, `fix`, and `edit` all write real files — for a linked app, the
  * user's actual project — so they stay on Opus: a wrong edit costs more than
- * a slow one. `route` is the v1.5 ⌘K intent classifier ("open an existing app, or
- * build one?"); it is a tiny decision felt on every invocation, so it rides
- * the fast tier. No call site uses it yet — it is here so the next one has to
- * pick a tier instead of inheriting whatever generation uses.
+ * a slow one. `route` is the ⌘K intent classifier ("open an existing app,
+ * build one, or neither?"); it is a tiny decision felt on every invocation,
+ * so it rides the fast tier.
  */
 export const MODELS = {
   generate: 'claude-opus-5',
@@ -42,6 +41,125 @@ export const MODELS = {
 export function outputConfig(model) {
   if (String(model).startsWith('claude-haiku')) return {}
   return { output_config: { effort: 'high' } }
+}
+
+const ROUTE_SYSTEM_PROMPT = `You route what a person typed into the ⌘K box of Local Reef, a desktop shell that builds and opens small local apps. Decide what they want and call route exactly once.
+
+Intents:
+- "open": they want an app that is already installed — named outright ("open notes"), or plainly implied by what an installed app does ("check my emails" when a mail app is installed). Set "app" to that app's id, exactly as listed.
+- "build": they are describing an app to create — a description ("a pomodoro timer with session history") or an ask ("make me a habit tracker"). Anything that works as a small offline app. If they say new/another/rebuild about something already installed, it is still "build".
+- "other": neither — a question, a task no local app here can do, or conversation. Set "reply": one or two plain sentences. Be honest about what this desktop is: it opens the apps listed and builds new ones, and a built app runs fully offline — it cannot reach the network, read email, or act outside its own window. If a small offline app could genuinely serve the underlying need, name it as something they could ask to build; otherwise do not stretch.
+
+When torn between open and build, prefer open — a wrong open costs one keystroke, a wrong build runs for minutes. When torn about whether something is buildable, prefer "other" and say what you could build instead.`
+
+/**
+ * Structured output via a forced tool call: the classifier cannot answer in
+ * prose, only in this shape, which is what makes it safe to parse.
+ */
+export const ROUTE_TOOL = {
+  name: 'route',
+  description: 'Report what the person wants ⌘K to do.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      intent: { type: 'string', enum: ['open', 'build', 'other'] },
+      app: { type: 'string', description: 'For "open": the installed app id, exactly as listed.' },
+      reply: { type: 'string', description: 'For "other": one or two sentences shown in the palette.' },
+    },
+    required: ['intent'],
+  },
+}
+
+/** The routing turn: what was typed, and what is installed to match against. */
+export function routePrompt(prompt, apps) {
+  const listing = (apps ?? []).map((a) => `- ${a.id}: ${a.name ?? a.id}`).join('\n')
+  return [
+    `They typed: ${prompt}`,
+    '',
+    'Installed apps:',
+    listing || '(none)',
+  ].join('\n')
+}
+
+/**
+ * The model's routing decision, validated against the registry. Every
+ * fallback here is deliberate:
+ *
+ * - "open" naming an app that does not exist must not open anything — and
+ *   must not silently build either, since the person asked for something they
+ *   believe exists. Tell them, cheaply.
+ * - Unrecognisable output falls back to "build", which is exactly what ⌘K
+ *   did before the router existed. The router may only ever improve on that.
+ */
+export function parseRoute(input, apps) {
+  const intent = input?.intent
+
+  if (intent === 'open') {
+    if ((apps ?? []).some((a) => a.id === input.app)) return { intent: 'open', app: input.app }
+    return { intent: 'other', reply: 'There is no app for that here yet — describe it and ⌘K will build it.' }
+  }
+
+  if (intent === 'other') {
+    const reply = typeof input.reply === 'string' ? input.reply.trim() : ''
+    return {
+      intent: 'other',
+      reply: reply || 'This desktop opens the apps in the dock and builds new ones — describe an app to build it.',
+    }
+  }
+
+  return { intent: 'build' }
+}
+
+/**
+ * The ⌘K intent router. `runRoute` is injected the same way createGenerator
+ * takes `runAgent`, so routing logic is testable without the network.
+ *
+ * The router is a latency tax on every submit, so it is disposable: any
+ * failure — error, timeout, nonsense — routes to "build", the pre-router
+ * behaviour. A hung classifier must never hold the palette hostage.
+ */
+export function createRouter({ runRoute, timeoutMs = 10_000 }) {
+  async function route({ prompt, apps }) {
+    let timer
+    try {
+      const raw = await Promise.race([
+        runRoute({ system: ROUTE_SYSTEM_PROMPT, prompt: routePrompt(prompt, apps) }),
+        new Promise((resolve) => {
+          timer = setTimeout(() => resolve(undefined), timeoutMs)
+        }),
+      ])
+      return parseRoute(raw, apps)
+    } catch {
+      return { intent: 'build' }
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+
+  return { route }
+}
+
+/**
+ * The real model-backed route call: one small non-streaming request on the
+ * fast tier, tool choice forced so the reply is always the tool's shape.
+ */
+export function createRouteRunner({ apiKey, model = MODELS.route } = {}) {
+  return async function runRoute({ system, prompt }) {
+    const { default: Anthropic } = await import('@anthropic-ai/sdk')
+    const client = new Anthropic({ ...(apiKey ? { apiKey } : {}), maxRetries: 1 })
+
+    const message = await client.messages.create({
+      model,
+      max_tokens: 300,
+      ...outputConfig(model),
+      system,
+      messages: [{ role: 'user', content: prompt }],
+      tools: [ROUTE_TOOL],
+      tool_choice: { type: 'tool', name: ROUTE_TOOL.name },
+    })
+
+    return message.content?.find((block) => block.type === 'tool_use')?.input
+  }
 }
 
 const SYSTEM_PROMPT = `You generate small, self-contained apps for Local Reef, a desktop shell that runs local apps in windows.

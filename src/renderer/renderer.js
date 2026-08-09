@@ -694,9 +694,11 @@ function setPaletteMode(mode) {
   const needsKey = mode === 'key'
 
   paletteHintEl.hidden = !needsKey
-  paletteEnterEl.textContent = needsKey ? 'save key' : 'build'
+  // 'go', not 'build': Enter is routed — it may open an app or answer in
+  // place, and promising "build" before the intent is known would lie.
+  paletteEnterEl.textContent = needsKey ? 'save key' : 'go'
   promptEl.type = needsKey ? 'password' : 'text'
-  promptEl.placeholder = needsKey ? 'sk-ant-…' : 'Describe an app to build…'
+  promptEl.placeholder = needsKey ? 'sk-ant-…' : 'Describe an app to build, or name one to open…'
 }
 
 /**
@@ -801,23 +803,55 @@ async function build() {
   generating = true
   promptEl.disabled = true
   progressEl.replaceChildren()
-  paletteStatusEl = statusLine('Designing the app…')
+  // Intent-neutral: at this point the router has not yet said whether this
+  // is a build, an open, or a question.
+  paletteStatusEl = statusLine('Reading that…')
 
-  // Resolves as soon as the build has an id; the work itself carries on in
-  // main and reports back through onGenerating / onGenerated.
+  // Resolves as soon as main knows what this is: an open or a reply settles
+  // it outright; a build resolves once it has an id, and the work carries on
+  // in main, reporting back through onGenerating / onGenerated.
   const result = await window.reef.generate(prompt)
   generating = false
 
-  if (!result.ok) {
+  const settle = () => {
     paletteStatusEl?.remove()
     paletteStatusEl = null
     promptEl.disabled = false
+  }
+
+  if (!result.ok) {
+    settle()
     if (paletteEl.hidden) {
       toast(result.error ?? 'Generation failed', { error: true })
     } else {
       progressLine(result.error ?? 'Generation failed', { icon: '×', className: 'err' })
       promptEl.focus()
     }
+    return
+  }
+
+  // "check my emails" with a mail app installed: not a build request, an
+  // intent — open the app that answers it.
+  if (result.action === 'open') {
+    settle()
+    const apps = await window.reef.listApps()
+    const found = apps.find((a) => a.id === result.id)
+    if (!found) {
+      progressLine(`Meant to open "${result.id}", but it is gone.`, { icon: '×', className: 'err' })
+      promptEl.focus()
+      return
+    }
+    closePalette()
+    openApp(found)
+    return
+  }
+
+  // Neither an app to open nor one to build: the router answers in place,
+  // the prompt stays for rephrasing, and nothing expensive ran.
+  if (result.action === 'reply') {
+    settle()
+    progressLine(result.reply ?? '', { className: 'reply' })
+    promptEl.focus()
     return
   }
 

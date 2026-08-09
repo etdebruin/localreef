@@ -46,6 +46,12 @@ Press **⌘K**, describe what you want, hit Enter:
 Takes roughly two minutes. The result is a single self-contained `index.html`
 with no build step and no install, so it opens the moment it exists.
 
+⌘K reads intent before it builds. Name something already installed ("open my
+notes") and it opens instead of building a duplicate. Ask for something no
+local app can do ("check my emails") and it answers in the palette — honestly,
+in a sentence — rather than spending minutes building a mock inbox that can't
+work. Only a genuine app description starts a build.
+
 Needs an Anthropic API key — either `ANTHROPIC_API_KEY` in the environment, or
 one saved in Settings. The Settings route matters: launched from the Dock or
 Finder, a macOS app inherits no shell environment at all, so the variable is

@@ -101,11 +101,21 @@ contextBridge.exposeInMainWorld('reef', {
   launch: async () => ({ ok: true, url: 'about:blank', name: 'Probe', icon: '🧪' }),
   stop: async () => ({ ok: true }),
   reveal: async () => ({ ok: true }),
-  // Mirrors main's background contract: the invoke resolves as soon as the
-  // build has an id, and the outcome arrives later on the generated channel.
+  // Mirrors main's routed contract: an open or a reply settles the invoke
+  // outright; a build resolves as soon as it has an id and the outcome
+  // arrives later on the generated channel. Routing is keyed on the prompt's
+  // shape so a harness can exercise each path main's classifier can take.
   generate: async (prompt) => {
     generateCalls.push(prompt)
-    return { ok: true, pending: true, id: 'tide-clock' }
+    if (prompt.startsWith('open ')) return { ok: true, action: 'open', id: prompt.slice(5) }
+    if (prompt.endsWith('?')) {
+      return {
+        ok: true,
+        action: 'reply',
+        reply: 'This desktop cannot read your mail — describe an app to build instead.',
+      }
+    }
+    return { ok: true, action: 'build', pending: true, id: 'tide-clock' }
   },
   __generateCalls: () => generateCalls,
   __emitGenerating: (payload) => {

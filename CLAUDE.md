@@ -257,8 +257,10 @@ Do not delete either suite as duplication.
 
 Models are chosen per task in `MODELS` (`agent.js`): generation, fixing, and
 the edit chat run `claude-opus-5` — all three edit real files, so wrong costs
-more than slow — and the future ⌘K intent router is pinned to
-`claude-haiku-4-5`. Haiku rejects
+more than slow — and the ⌘K intent router runs `claude-haiku-4-5`. Every ⌘K
+submit routes first (open an installed app / build / answer in the palette)
+via a forced tool call; any router failure or timeout falls back to `build`,
+the pre-router behaviour, so the classifier can never brick ⌘K. Haiku rejects
 `output_config.effort`, so the effort setting is derived from the model
 (`outputConfig()`), not hardcoded. `max_tokens: 32000`, `effort: 'high'` on
 Opus, streaming required. Tuning that was arrived at empirically:

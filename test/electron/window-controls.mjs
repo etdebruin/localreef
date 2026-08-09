@@ -583,7 +583,7 @@ app.whenReady().then(async () => {
   )
   check(
     'and the same box becomes the build prompt',
-    afterSave?.type === 'text' && afterSave.value === '' && afterSave.enterLabel === 'build',
+    afterSave?.type === 'text' && afterSave.value === '' && afterSave.enterLabel === 'go',
     JSON.stringify(afterSave),
   )
   check('the key explainer goes away', afterSave?.hintShown === false)
@@ -875,6 +875,65 @@ app.whenReady().then(async () => {
     return Math.abs(w.getBoundingClientRect().width - canvas.width) < 3
   })()`)
   check('double-clicking the titlebar maximizes too', dblMaxed === true, `filled=${dblMaxed}`)
+
+  // --- ⌘K routes: a question gets an answer, not a build ---
+  // "check my emails" is not an app description. Before the router it went
+  // straight into a minutes-long build of a mock inbox; now main answers in
+  // the palette and nothing expensive runs.
+  const pressEnter = () => {
+    win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Return' })
+    win.webContents.sendInputEvent({ type: 'char', keyCode: '\r' })
+    win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Return' })
+  }
+
+  const routePaletteBtn = await centreOf('#new-app')
+  if (routePaletteBtn) await clickAt(routePaletteBtn)
+  await wait(300)
+  await js(`document.getElementById('prompt').value = 'can you check my emails?'; true`)
+  pressEnter()
+  await wait(400)
+
+  const answered = await js(`(() => {
+    const reply = document.querySelector('#progress .line.reply')
+    const input = document.getElementById('prompt')
+    return {
+      paletteOpen: !document.getElementById('palette').hidden,
+      reply: reply?.textContent ?? null,
+      replyVisible: Boolean(reply && reply.getBoundingClientRect().height > 0),
+      editable: !input.disabled,
+      kept: input.value,
+      building: document.querySelector('.dock-app.building') !== null,
+    }
+  })()`)
+  check(
+    'a question is answered in the palette, visibly',
+    answered?.paletteOpen === true && answered.replyVisible === true && /mail/.test(answered.reply ?? ''),
+    JSON.stringify(answered),
+  )
+  check(
+    'the prompt stays put and editable for a rephrase',
+    answered?.editable === true && answered.kept === 'can you check my emails?',
+    JSON.stringify(answered),
+  )
+  check('and nothing started building', answered?.building === false, JSON.stringify(answered))
+
+  // --- ⌘K routes: naming an installed app opens it instead of building ---
+  await js(`document.getElementById('prompt').value = 'open doodle'; true`)
+  pressEnter()
+  await wait(500)
+
+  const openedByRoute = await js(`(() => ({
+    paletteClosed: document.getElementById('palette').hidden,
+    doodleOpen: [...document.querySelectorAll('.window')]
+      .some((w) => w.querySelector('.name').textContent === 'Doodle'),
+    building: document.querySelector('.dock-app.building') !== null,
+  }))()`)
+  check(
+    'naming an installed app opens it, palette dismissed',
+    openedByRoute?.paletteClosed === true && openedByRoute.doodleOpen === true,
+    JSON.stringify(openedByRoute),
+  )
+  check('opening built nothing either', openedByRoute?.building === false, JSON.stringify(openedByRoute))
 
   const failed = results.filter((r) => !r.passed)
   console.log(`\n${results.length - failed.length}/${results.length} passed`)

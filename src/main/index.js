@@ -24,7 +24,15 @@ import { createConsoleCapture } from '../core/console.js'
 import { createSupervisor } from './supervisor.js'
 import { createGateway } from '../gateway/index.js'
 import { AUTH_PARAM, AUTH_HEADER } from '../gateway/auth.js'
-import { MODELS, createGenerator, createFixer, createEditor, createClaudeRunner } from './agent.js'
+import {
+  MODELS,
+  createGenerator,
+  createFixer,
+  createEditor,
+  createClaudeRunner,
+  createRouter,
+  createRouteRunner,
+} from './agent.js'
 import { createWatcher } from './watcher.js'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
@@ -533,6 +541,17 @@ ipcMain.handle('apps:generate', async (_event, prompt) => {
   const apiKey = resolveApiKey(await settings.read())
   if (!apiKey) return { ok: false, error: NO_KEY }
 
+  // Route before building: "check my emails" is not an app description, and
+  // piping it into a minutes-long Opus build would produce a mock inbox that
+  // cannot work. The classifier decides open / build / neither on the fast
+  // tier; anything but a confident answer falls back to build inside route().
+  const registry = [...apps.values()].map((record) => ({ id: record.id, name: record.name }))
+  const router = createRouter({ runRoute: createRouteRunner({ apiKey }) })
+  const routed = await router.route({ prompt, apps: registry })
+
+  if (routed.intent === 'open') return { ok: true, action: 'open', id: routed.app }
+  if (routed.intent === 'other') return { ok: true, action: 'reply', reply: routed.reply }
+
   const generatedDir = path.join(app.getPath('userData'), 'apps')
   await fs.mkdir(generatedDir, { recursive: true })
 
@@ -557,7 +576,7 @@ ipcMain.handle('apps:generate', async (_event, prompt) => {
   )
 
   try {
-    return { ok: true, pending: true, id: await id }
+    return { ok: true, action: 'build', pending: true, id: await id }
   } catch (err) {
     return { ok: false, error: String(err?.message ?? err) }
   }

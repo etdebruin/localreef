@@ -986,6 +986,14 @@
       #progress .line.err { color: var(--danger); }
       #progress .line .tick { color: #4ade80; }
 
+      /* A routed answer — the palette speaking, not narrating a build. */
+      #progress .line.reply {
+        color: var(--text);
+        align-items: flex-start;
+        line-height: 1.45;
+        padding: 8px 0;
+      }
+
       /* The live line: what the agent is doing right now, marked by the same
          bubbles as the dock tile so the two are visibly one process. */
       @keyframes palette-bubble {
