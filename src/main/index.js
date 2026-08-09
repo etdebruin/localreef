@@ -106,9 +106,13 @@ const watcher = createWatcher({
 // leaves it untouched so the user can rephrase) and dies with the window.
 const editSessions = new Map()
 const editBusy = new Set()
-// Bumped on teardown so a turn racing a window close can't resurrect the
-// session it was started under.
-const editEpoch = new Map()
+// The in-flight turn, per app: the user's message and the last progress
+// event, so a pane rebuilt mid-turn can pick up where the old one left off.
+const editPending = new Map()
+// Busy sessions whose window closed. The turn keeps running; the conversation
+// is kept so a reopened window can resume it, and dies when the turn ends if
+// the window never came back — deferred, but still with the window.
+const orphanedEdits = new Set()
 
 /** How many past messages an edit turn carries. Disk is the real state, so
  * truncating old turns costs continuity, never correctness. */
@@ -436,6 +440,10 @@ ipcMain.handle('apps:list', async () => {
 })
 
 ipcMain.handle('apps:launch', async (_event, id) => {
+  // The window is back: an edit turn orphaned by its close is adopted again,
+  // so its conversation survives and its result lands normally.
+  orphanedEdits.delete(id)
+
   const record = apps.get(id)
   if (!record) return { ok: false, error: `No app called "${id}"` }
   if (record.error) return { ok: false, error: record.error }
@@ -465,8 +473,10 @@ ipcMain.handle('apps:launch', async (_event, id) => {
 // scoped to "this app is open" dies here.
 ipcMain.handle('apps:stop', async (_event, id) => {
   watcher.unwatch(id)
-  editSessions.delete(id)
-  editEpoch.set(id, (editEpoch.get(id) ?? 0) + 1)
+  // A turn in flight outlives its window — the agent keeps coding, and a
+  // reopened window resumes the conversation. See orphanedEdits.
+  if (editBusy.has(id)) orphanedEdits.add(id)
+  else editSessions.delete(id)
   await supervisor.stop(id)
   return { ok: true }
 })
@@ -658,7 +668,7 @@ ipcMain.handle('apps:edit', async (_event, { id, message } = {}) => {
   }
 
   editBusy.add(id)
-  const epoch = editEpoch.get(id) ?? 0
+  editPending.set(id, { message, progress: { phase: 'reading' } })
   try {
     const history = editSessions.get(id) ?? []
     const editor = createEditor({ runAgent: createClaudeRunner({ apiKey, model: MODELS.edit }) })
@@ -671,11 +681,19 @@ ipcMain.handle('apps:edit', async (_event, { id, message } = {}) => {
       history,
       consoleErrors: consoleCapture.recent(id),
       // Every event carries the id so concurrent edit sessions cannot cross
-      // streams — the palette-era 'thinking' event never had one.
-      onProgress: (progress) => mainWindow?.webContents.send('apps:editing', { ...progress, id }),
+      // streams — the palette-era 'thinking' event never had one. The last
+      // event is kept so a pane rebuilt mid-turn can resume from it.
+      onProgress: (progress) => {
+        const pending = editPending.get(id)
+        if (pending) pending.progress = progress
+        mainWindow?.webContents.send('apps:editing', { ...progress, id })
+      },
     })
 
-    if (result.ok && (editEpoch.get(id) ?? 0) === epoch) {
+    // An orphaned turn's window closed and never came back: its session is
+    // about to die, so appending to it or restarting its (already stopped)
+    // process would be work for nobody.
+    if (result.ok && !orphanedEdits.has(id)) {
       editSessions.set(
         id,
         [
@@ -689,8 +707,8 @@ ipcMain.handle('apps:edit', async (_event, { id, message } = {}) => {
 
       // The watcher reloads a static app, but a server app keeps running the
       // old code — without a restart the edit "succeeds" and nothing on
-      // screen changes. Same epoch guard: a window closed mid-turn already
-      // tore its process down, and this must not resurrect it.
+      // screen changes. The 'ready' gate keeps this from resurrecting a
+      // process a window close already tore down.
       if (record.type === 'server' && supervisor.get(id).status === 'ready') {
         await supervisor.stop(id)
         await supervisor.ensureStarted(apps.get(id))
@@ -704,8 +722,21 @@ ipcMain.handle('apps:edit', async (_event, { id, message } = {}) => {
     return result
   } finally {
     editBusy.delete(id)
+    editPending.delete(id)
+    // History dies with the window — deferred to here when the close raced a
+    // running turn, so a reopened window could resume the conversation.
+    if (orphanedEdits.delete(id)) editSessions.delete(id)
   }
 })
+
+// What a (re)opening pane needs to rebuild itself: the finished turns, plus
+// the in-flight one — message and latest progress — if the agent is still
+// working.
+ipcMain.handle('apps:editState', async (_event, id) => ({
+  history: editSessions.get(id) ?? [],
+  busy: editBusy.has(id),
+  pending: editPending.get(id) ?? null,
+}))
 
 async function shutdown() {
   watcher.close()

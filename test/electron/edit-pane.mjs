@@ -380,6 +380,101 @@ app.whenReady().then(async () => {
     `${paneOpen?.window} -> ${closed?.width}`,
   )
 
+  // --- the conversation survives the pane being toggled ---
+  // The history lives in main; the pane is only a view of it. Reopening the
+  // pane must rebuild the log, not start a blank one.
+  const editReopenPoint = await centreOf('.window .titlebar button.edit')
+  if (editReopenPoint) await clickAt(editReopenPoint)
+  await wait(200)
+
+  const rebuilt = await js(`(() => {
+    const log = document.querySelector('.chat-log')
+    if (!log) return null
+    return {
+      user: log.querySelector('.msg.user')?.textContent ?? null,
+      assistant: log.querySelector('.msg.assistant')?.textContent ?? null,
+    }
+  })()`)
+  check(
+    'reopening the pane rebuilds the conversation from main',
+    rebuilt?.user === 'make the header bigger' && rebuilt?.assistant === 'Done.',
+    JSON.stringify(rebuilt),
+  )
+
+  // --- closing the window mid-turn, then reopening it ---
+  // The agent keeps coding after its window closes. A reopened window must
+  // come back mid-sentence: pane open, history rendered, live line ticking.
+  await js(`window.reef.__holdEdits()`)
+  await js(`(() => {
+    const input = document.querySelector('.chat-input')
+    input.value = 'now the footer'
+    return true
+  })()`)
+  const send2 = await centreOf('.chat-send')
+  if (send2) await clickAt(send2)
+  await wait(200)
+  await js(`window.reef.__emitEditing({ id: 'doodle', phase: 'thinking', tool: 'read_file' })`)
+
+  const closeMidTurn = await centreOf('.window .titlebar button.close')
+  if (closeMidTurn) await clickAt(closeMidTurn)
+  const windowGone = await js(`document.querySelectorAll('.window').length`)
+  check('the window closes while the turn is running', windowGone === 0)
+
+  const doodleAgain = await centreOf('#dock-apps .dock-app:nth-of-type(3)')
+  if (doodleAgain) await clickAt(doodleAgain)
+  await wait(500)
+
+  const resumed = await js(`(() => {
+    const w = document.querySelector('.window')
+    const chat = w?.querySelector('.chat')
+    if (!w) return null
+    if (!chat) return { pane: false }
+    const log = chat.querySelector('.chat-log')
+    const line = log?.querySelector('.chat-progress')
+    const box = line?.querySelector('.bubbles')?.getBoundingClientRect()
+    return {
+      pane: true,
+      users: [...log.querySelectorAll('.msg.user')].map((el) => el.textContent),
+      assistants: [...log.querySelectorAll('.msg.assistant')].map((el) => el.textContent),
+      progressText: line?.querySelector('.status-text')?.textContent ?? null,
+      bubblesVisible: Boolean(box) && box.width > 0 && box.height > 0,
+      inputDisabled: chat.querySelector('.chat-input')?.disabled ?? null,
+    }
+  })()`)
+  check('the reopened window brings the pane back by itself', resumed?.pane === true, JSON.stringify(resumed))
+  check(
+    'the rebuilt log carries the whole conversation, in-flight turn included',
+    resumed?.users?.length === 2 && resumed.users[1] === 'now the footer' && resumed.assistants?.length === 1,
+    JSON.stringify(resumed),
+  )
+  check(
+    'the live line resumes from the last progress event, bubbling',
+    resumed?.progressText === 'Reading it back…' && resumed.bubblesVisible === true,
+    JSON.stringify(resumed),
+  )
+  check('the input stays held while the turn runs', resumed?.inputDisabled === true, JSON.stringify(resumed))
+
+  const resumedShot = await win.webContents.capturePage()
+  await fs.writeFile(path.join(projectRoot, '.shots', 'edit-pane-resumed.png'), resumedShot.toPNG())
+
+  // The turn finishing lands in the rebuilt pane, not the dead one it started in.
+  await js(`window.reef.__releaseEdits()`)
+  await wait(300)
+  const landed = await js(`(() => {
+    const chat = document.querySelector('.window .chat')
+    if (!chat) return null
+    return {
+      assistants: chat.querySelectorAll('.msg.assistant').length,
+      progressGone: chat.querySelectorAll('.chat-progress').length === 0,
+      inputEnabled: !chat.querySelector('.chat-input').disabled,
+    }
+  })()`)
+  check(
+    "the finished turn's reply lands in the reopened pane",
+    landed?.assistants === 2 && landed.progressGone === true && landed.inputEnabled === true,
+    JSON.stringify(landed),
+  )
+
   const failed = results.filter((r) => !r.passed)
   console.log(`\n${results.length - failed.length}/${results.length} passed`)
   app.exit(failed.length === 0 ? 0 : 1)

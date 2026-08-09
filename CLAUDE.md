@@ -191,7 +191,8 @@ frame actually re-navigates on the event.
 
 **A server app runs its old code until restarted.** The watcher only covers
 static apps, so a successful edit turn on a `server` app stops and restarts
-its process (same epoch guard as the session append) and re-navigates the
+its process (gated on the process being `ready`, so a turn that outlived its
+window cannot resurrect one a close already tore down) and re-navigates the
 frame via `apps:changed`. Without it the edit "succeeds" and nothing on
 screen changes.
 
@@ -199,7 +200,15 @@ screen changes.
 thinking blocks are never replayed across turns; the files on disk are the
 state and each turn's prompt carries a fresh listing. History dies with the
 window — `apps:stop` is the single teardown hook (the renderer calls it for
-every window close, static apps included).
+every window close, static apps included) — with one deliberate deferral:
+closing a window mid-turn orphans the session instead of deleting it
+(`orphanedEdits`), because the agent keeps coding and a reopened window must
+resume the conversation — pane auto-open, history rebuilt from
+`apps:editState`, live line seeded from the last progress event. If the
+window never comes back, the session dies when the turn ends. The pane is a
+*view* of main's conversation, never its owner: the renderer's
+`finishEditTurn` delivers a result to whichever pane exists at completion,
+found by id, not to the DOM the turn started in.
 
 **A minimized window reads `offset*` as 0.** It is `display: none`, where every
 offset property is 0 — persisting those would wipe the window's real geometry

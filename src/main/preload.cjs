@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld('reef', {
   generate: (prompt) => ipcRenderer.invoke('apps:generate', prompt),
   fix: (id) => ipcRenderer.invoke('apps:fix', id),
   edit: (payload) => ipcRenderer.invoke('apps:edit', payload),
+  editState: (id) => ipcRenderer.invoke('apps:editState', id),
   link: (paths) => ipcRenderer.invoke('apps:link', paths),
   unlink: (dir) => ipcRenderer.invoke('apps:unlink', dir),
 

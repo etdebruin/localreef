@@ -536,6 +536,10 @@ async function openApp(app, at) {
   focusWindow(app.id)
   syncDock()
 
+  // A window reopened while an edit turn is still running comes back
+  // mid-sentence: pane open, history rendered, live line ticking.
+  if (app.generated || app.bundled) restoreEditPane(app.id)
+
   if (app.status === 'broken') {
     showState(
       win.stage,
@@ -615,29 +619,13 @@ function toggleEditPane(id) {
     input.disabled = true
     send.disabled = true
     log.append(bubble('user', message))
-    // Same anatomy as the palette's live line: bubbles say "still going",
-    // the text says what the agent is doing right now.
-    const progress = h(
-      'div',
-      { className: 'chat-progress' },
-      h('span', { className: 'bubbles' }, h('i'), h('i'), h('i')),
-      h('span', { className: 'status-text', textContent: 'Reading the app…' }),
-    )
-    log.append(progress)
+    log.append(chatProgressLine('Reading the app…'))
     log.scrollTop = log.scrollHeight
 
-    const result = await window.reef.edit({ id, message })
-
-    progress.remove()
-    log.append(
-      result.ok
-        ? bubble('assistant', result.reply || 'Done.')
-        : bubble('err', result.error ?? 'Something went wrong — the app may be part-changed.'),
-    )
-    log.scrollTop = log.scrollHeight
-    input.disabled = false
-    send.disabled = false
-    input.focus()
+    // The pane this turn started in may be gone by the time it finishes —
+    // hidden, or torn down with the window and rebuilt in a reopened one — so
+    // the result is delivered to whichever pane exists then, found by id.
+    finishEditTurn(id, await window.reef.edit({ id, message }))
   })
 
   win.chat = aside
@@ -645,6 +633,75 @@ function toggleEditPane(id) {
   // Give the chat its own room instead of taking it from the app.
   win.el.style.width = `${Math.min(window.innerWidth - win.el.offsetLeft - 16, win.el.offsetWidth + 360)}px`
   win.body.append(aside)
+  populateEditPane(id, log, { input, send })
+  input.focus()
+}
+
+/** The live line's anatomy: bubbles carry "still going", the text says what. */
+function chatProgressLine(text) {
+  return h(
+    'div',
+    { className: 'chat-progress' },
+    h('span', { className: 'bubbles' }, h('i'), h('i'), h('i')),
+    h('span', { className: 'status-text', textContent: text }),
+  )
+}
+
+/** One vocabulary for a live event and for seeding a rebuilt pane. */
+function editStatusText({ phase, tool, file } = {}) {
+  if (phase === 'thinking') return TOOL_STATUS[tool] ?? 'Thinking…'
+  if (phase === 'writing') return `Rewriting ${file}…`
+  return 'Reading the app…'
+}
+
+/**
+ * Rebuild the log from main's conversation. History survives the pane being
+ * toggled, and an in-flight turn survives the whole window closing — a pane
+ * rebuilt mid-turn picks the conversation up mid-sentence, live line included.
+ */
+async function populateEditPane(id, log, { input, send }) {
+  const state = await window.reef.editState(id)
+  // The pane may have been closed, or rebuilt again, while this fetched.
+  if (openWindows.get(id)?.chat?.querySelector('.chat-log') !== log) return
+
+  for (const turn of state.history ?? []) {
+    log.append(bubble(turn.role === 'user' ? 'user' : 'assistant', turn.content))
+  }
+  if (state.busy) {
+    if (state.pending?.message) log.append(bubble('user', state.pending.message))
+    log.append(chatProgressLine(editStatusText(state.pending?.progress)))
+    input.disabled = true
+    send.disabled = true
+  }
+  log.scrollTop = log.scrollHeight
+}
+
+/**
+ * A window reopened while its edit turn is still running gets the chat back
+ * without being asked: the conversation is clearly not over.
+ */
+async function restoreEditPane(id) {
+  const state = await window.reef.editState(id)
+  const win = openWindows.get(id)
+  if (!win || win.chat) return
+  if (state.busy || state.history?.length) toggleEditPane(id)
+}
+
+/** The finished turn lands in whichever pane is open for the app now. */
+function finishEditTurn(id, result) {
+  const chat = openWindows.get(id)?.chat
+  if (!chat) return
+  chat.querySelector('.chat-progress')?.remove()
+  const log = chat.querySelector('.chat-log')
+  log.append(
+    result.ok
+      ? bubble('assistant', result.reply || 'Done.')
+      : bubble('err', result.error ?? 'Something went wrong — the app may be part-changed.'),
+  )
+  log.scrollTop = log.scrollHeight
+  const input = chat.querySelector('.chat-input')
+  chat.querySelector('.chat-send').disabled = false
+  input.disabled = false
   input.focus()
 }
 

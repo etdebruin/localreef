@@ -102,6 +102,11 @@ let generateCalls = []
 let holdEdits = false
 const pendingEdits = []
 
+// Mirrors main's conversation state: history of finished turns, plus the
+// in-flight turn while one runs. editState() serves it the way apps:editState
+// does, so a rebuilt pane can be asserted against.
+let editState = { history: [], busy: false, pending: null }
+
 contextBridge.exposeInMainWorld('reef', {
   listApps: async () => apps,
   // about:blank keeps the iframe from needing a live origin; the window
@@ -147,10 +152,21 @@ contextBridge.exposeInMainWorld('reef', {
     for (const cb of listeners.generated) cb(payload)
   },
   fix: async () => ({ ok: false, error: 'stubbed' }),
-  edit: async ({ id } = {}) => {
+  edit: async ({ id, message } = {}) => {
+    editState = { ...editState, busy: true, pending: { message, progress: { phase: 'reading' } } }
     if (holdEdits) await new Promise((resolve) => pendingEdits.push(resolve))
+    editState = {
+      history: [
+        ...editState.history,
+        { role: 'user', content: message },
+        { role: 'assistant', content: 'Done.' },
+      ],
+      busy: false,
+      pending: null,
+    }
     return { ok: true, id, files: ['index.html'], reply: 'Done.' }
   },
+  editState: async () => editState,
   link: async () => ({ ok: true, linked: 0, errors: [] }),
   unlink: async () => ({ ok: true }),
   pathForFile: () => null,
@@ -211,7 +227,9 @@ contextBridge.exposeInMainWorld('reef', {
   },
   // Fire an edit-progress event the way main relays them mid-turn, and hold or
   // release the turn itself so the harness can assert the in-flight state.
+  // Main remembers the last event for panes rebuilt later; so does the stub.
   __emitEditing: (payload) => {
+    if (editState.pending) editState.pending.progress = payload
     for (const cb of listeners.editing) cb(payload)
   },
   __holdEdits: () => {
