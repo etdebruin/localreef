@@ -385,9 +385,11 @@ landing while the user is elsewhere announces itself with a toast instead of
 stealing focus by opening the window. Only a user who kept the palette open
 through the whole build gets the app opened for them — attention decides.
 
-No CDN — the CSP blocks external hosts and we want apps to work offline. The gateway
-serves a local vendor bundle on every app origin, so generated apps can
-`import React from '/__reef/vendor/react'`.
+No CDN for code — an app must open instantly and still render offline, so scripts,
+styles, and fonts are inline or local. Network is for *data*: a generated app may
+fetch from HTTPS APIs when that is its purpose (browser rules apply — CORS, no raw
+TCP). The gateway serves a local vendor bundle on every app origin, so generated
+apps can `import React from '/__reef/vendor/react'`.
 
 ### Model configuration
 
@@ -460,7 +462,7 @@ Linked apps (drag-dropped) are registered by absolute path and stay where they a
 |---|---|
 | App ↔ app | Distinct origins; storage partitioned by the browser |
 | App ↔ host | Preload bridge only; no node integration; capability-gated |
-| App ↔ network | Strict CSP, allowlist per manifest |
+| App ↔ network | Open by deliberate choice — browser rules only (CORS, no raw TCP). The shell document's CSP does not reach app frames; a per-manifest allowlist is the upgrade path if untrusted apps ever run |
 | Gateway ↔ other local procs | Loopback bind + rotating session cookie |
 | Child servers | Bound `127.0.0.1` only, never `0.0.0.0` |
 | Agent ↔ filesystem | Tool paths canonicalized and confined to the app root |

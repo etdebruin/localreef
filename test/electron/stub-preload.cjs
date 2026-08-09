@@ -112,7 +112,7 @@ contextBridge.exposeInMainWorld('reef', {
       return {
         ok: true,
         action: 'reply',
-        reply: 'This desktop cannot read your mail — describe an app to build instead.',
+        reply: 'Reading your mail would need API access you supply — describe an app to build instead.',
       }
     }
     return { ok: true, action: 'build', pending: true, id: 'tide-clock' }
