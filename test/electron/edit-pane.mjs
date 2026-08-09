@@ -73,8 +73,8 @@ app.whenReady().then(async () => {
     await wait(260)
   }
 
-  // --- a non-generated app gets no edit affordance ---
-  // The stub's first app ("probe") is not reef-built.
+  // --- a linked app gets no edit affordance ---
+  // The stub's first app ("probe") is a linked project: someone's checkout.
   const probeIcon = await centreOf('#dock-apps .dock-app:nth-of-type(1)')
   check('the probe app is in the dock', Boolean(probeIcon))
   if (probeIcon) await clickAt(probeIcon)
@@ -85,13 +85,34 @@ app.whenReady().then(async () => {
     return { window: true, editButtons: w.querySelectorAll('.titlebar button.edit').length }
   })()`)
   check(
-    'an app built outside reef has no Edit button',
+    'a linked app has no Edit button',
     probeEdit.window === true && probeEdit.editButtons === 0,
     JSON.stringify(probeEdit),
   )
 
   const probeClose = await centreOf('.window .titlebar button.close')
   if (probeClose) await clickAt(probeClose)
+
+  // --- a bundled sample carries it (editable by adoption) ---
+  // "feed-reader" is the stub's bundled sample, second in the dock.
+  const sampleIcon = await centreOf('#dock-apps .dock-app:nth-of-type(2)')
+  check('the bundled sample is in the dock', Boolean(sampleIcon))
+  if (sampleIcon) await clickAt(sampleIcon)
+
+  const sampleEdit = await js(`(() => {
+    const el = document.querySelector('.window .titlebar button.edit')
+    if (!el) return null
+    const r = el.getBoundingClientRect()
+    return { w: Math.round(r.width), h: Math.round(r.height) }
+  })()`)
+  check(
+    'a bundled sample has a visible Edit button',
+    Boolean(sampleEdit) && sampleEdit.w > 0 && sampleEdit.h > 0,
+    JSON.stringify(sampleEdit),
+  )
+
+  const sampleClose = await centreOf('.window .titlebar button.close')
+  if (sampleClose) await clickAt(sampleClose)
 
   // --- the generated app carries the affordance ---
   // "doodle" is the stub's ⌘K-built app, third in the dock.
@@ -219,6 +240,27 @@ app.whenReady().then(async () => {
   )
   check('the progress line is cleared after the turn', thread?.progressGone === true)
   check('the input is usable for the next turn', thread?.inputEnabled === true)
+
+  // --- a change on disk re-navigates the open frame ---
+  // main announces edits (watcher hits, server-edit restarts) on apps:changed;
+  // the user-visible effect is the frame loading again. This was shipped
+  // broken once: openApp stored a spread copy of the window in openWindows,
+  // so the frame assigned after launch never reached the object onChanged
+  // reads, and the reload silently did nothing for every app.
+  const reload = await js(`(async () => {
+    const f = document.querySelector('.window iframe')
+    if (!f) return { frame: false }
+    let loads = 0
+    f.addEventListener('load', () => { loads += 1 })
+    window.reef.__emitChanged({ id: 'doodle' })
+    await new Promise((r) => setTimeout(r, 400))
+    return { frame: true, loads }
+  })()`)
+  check(
+    'a files-changed event re-navigates the app frame',
+    reload.frame === true && reload.loads >= 1,
+    JSON.stringify(reload),
+  )
 
   // --- dragging still works with the extra button in the titlebar ---
   const before = await js(

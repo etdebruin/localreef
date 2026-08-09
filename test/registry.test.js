@@ -4,7 +4,7 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 
-import { readApp, scanApps } from '../src/core/registry.js'
+import { readApp, scanApps, adoptApp } from '../src/core/registry.js'
 
 async function tmp() {
   return fs.mkdtemp(path.join(os.tmpdir(), 'ld-reg-'))
@@ -181,5 +181,69 @@ test('scanApps with requireManifest', async (t) => {
   await t.test('without the option every folder is still scanned', async () => {
     const apps = await scanApps(root)
     assert.ok(apps.find((a) => a.id === 'some-lib'), 'curated scans keep inferring')
+  })
+})
+
+test('adoptApp', async (t) => {
+  const root = await tmp()
+  t.after(() => fs.rm(root, { recursive: true, force: true }))
+
+  await t.test('copies a bundled app into the generated root', async () => {
+    const src = await makeApp(root, 'clock-src', {
+      'reef.json': JSON.stringify({ name: 'Clock' }),
+      'server.js': 'code',
+      'lib/util.js': 'nested',
+    })
+    const destRoot = path.join(root, 'generated-a')
+
+    const result = await adoptApp({ srcDir: src, destRoot, id: 'clock' })
+
+    assert.equal(result.ok, true)
+    assert.equal(result.dir, path.join(destRoot, 'clock'))
+    assert.equal(await fs.readFile(path.join(result.dir, 'server.js'), 'utf8'), 'code')
+    assert.equal(await fs.readFile(path.join(result.dir, 'lib/util.js'), 'utf8'), 'nested')
+    // The original is untouched — adoption copies, never moves.
+    assert.equal(await fs.readFile(path.join(src, 'server.js'), 'utf8'), 'code')
+  })
+
+  await t.test('refuses to overwrite an existing folder', async () => {
+    const src = await makeApp(root, 'clash-src', { 'index.html': 'new' })
+    const destRoot = path.join(root, 'generated-b')
+    await makeApp(destRoot, 'clash', { 'index.html': 'precious user data' })
+
+    const result = await adoptApp({ srcDir: src, destRoot, id: 'clash' })
+
+    assert.equal(result.ok, false)
+    assert.match(result.error, /already exists/)
+    const kept = await fs.readFile(path.join(destRoot, 'clash/index.html'), 'utf8')
+    assert.equal(kept, 'precious user data')
+  })
+
+  await t.test('leaves node_modules and dotfiles behind', async () => {
+    const src = await makeApp(root, 'heavy-src', {
+      'index.html': 'x',
+      'node_modules/left-pad/index.js': 'pad',
+      '.git/HEAD': 'ref',
+      '.DS_Store': 'junk',
+    })
+    const destRoot = path.join(root, 'generated-c')
+
+    const result = await adoptApp({ srcDir: src, destRoot, id: 'heavy' })
+
+    assert.equal(result.ok, true)
+    await assert.rejects(fs.access(path.join(result.dir, 'node_modules')))
+    await assert.rejects(fs.access(path.join(result.dir, '.git')))
+    await assert.rejects(fs.access(path.join(result.dir, '.DS_Store')))
+    assert.equal(await fs.readFile(path.join(result.dir, 'index.html'), 'utf8'), 'x')
+  })
+
+  await t.test('a vanished source is an error, not a crash', async () => {
+    const result = await adoptApp({
+      srcDir: path.join(root, 'no-such-folder'),
+      destRoot: path.join(root, 'generated-d'),
+      id: 'ghost',
+    })
+    assert.equal(result.ok, false)
+    assert.ok(result.error)
   })
 })

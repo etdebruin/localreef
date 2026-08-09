@@ -35,15 +35,20 @@ the ledger.
   feared risk materialised — no host-check rejection, and the HMR client's URL
   survives proxying. Two *unforeseen* bugs did: Vite binds IPv6 loopback only,
   and `host` was not threaded to the proxy.
-- **M5 — edit live.** A chat pane beside any ⌘K-built app (and only those —
-  provenance is the `generated` flag, derived from the folder living in
-  `userData/apps`, enforced in main). Multi-turn: the conversation lives in
-  main, text turns only, and dies with the window; the files are the real
-  state. Every open static app's folder is watched (`src/main/watcher.js`) and
-  the frame reloads on change — chat edits and external-editor edits alike;
-  server apps keep their own HMR. Deferred: restart-on-edit for HMR-less
-  server apps (a manifest opt-in, someday); the titlebar name goes stale if a
-  turn renames the app (dock updates, reopen fixes the title).
+- **M5 — edit live.** A chat pane beside any ⌘K-built app, and beside the
+  bundled samples via adopt-on-edit: the first turn copies the sample into
+  `userData/apps`, where provenance (the `generated` flag, derived from the
+  folder living there, enforced in main) makes it editable — the shipped
+  original stays pristine underneath, so deleting the copy is "reset to
+  stock". Linked and discovered apps stay refused. Multi-turn: the
+  conversation lives in main, text turns only, and dies with the window; the
+  files are the real state. Every open static app's folder is watched
+  (`src/main/watcher.js`) and the frame reloads on change — chat edits and
+  external-editor edits alike. A server app is restarted after each
+  successful edit turn and its frame re-navigated, verified live against the
+  bundled clock (adopt → edit → restart → change on screen). Deferred: the
+  titlebar name goes stale if a turn renames the app (dock updates, reopen
+  fixes the title).
 
 ---
 

@@ -314,9 +314,11 @@ function makeWindow(app, at) {
     h('span', { className: 'spacer' }),
   )
 
-  // Only reef-built apps carry the edit chat: everything else on the desktop
-  // is somebody's real checkout, and main refuses to edit those anyway.
-  if (app.generated) {
+  // Reef-built apps carry the edit chat, and so do the bundled samples —
+  // main adopts a sample (copies it into userData/apps) on the first turn.
+  // Linked and discovered apps are somebody's real checkout; main refuses
+  // to edit those, so no button.
+  if (app.generated || app.bundled) {
     const edit = h('button', { className: 'edit', title: 'Edit with AI', textContent: '✎' })
     edit.addEventListener('click', () => toggleEditPane(app.id))
     titlebar.append(edit)
@@ -518,7 +520,12 @@ async function openApp(app, at) {
   if (openWindows.has(app.id)) return focusWindow(app.id)
 
   const win = makeWindow(app, at)
-  openWindows.set(app.id, { ...win, app, minimized: false, maximized: Boolean(at?.maximized) })
+  // The map must hold THIS object, not a copy: the launch path below assigns
+  // win.url and win.frame after registration, and onChanged reads them back
+  // through the map. A spread here shipped a bug where every frame-reload
+  // (watcher hits, server-edit restarts) silently did nothing.
+  Object.assign(win, { app, minimized: false, maximized: Boolean(at?.maximized) })
+  openWindows.set(app.id, win)
   // A session saved full screen comes back full screen; the class is all the
   // state, the inline geometry underneath is the restore target.
   if (at?.maximized) win.el.classList.add('maximized')

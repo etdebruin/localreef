@@ -52,10 +52,10 @@ const BACKGROUNDS = [
   },
 ]
 
-// Three apps: one declaring an emoji, one declaring nothing and falling
-// back to a generated tile, and one ⌘K-built — the only one whose window
-// may carry the edit affordance. Mutable so a harness can grow it the way a
-// real ⌘K build grows the registry.
+// Three apps, one per provenance the edit affordance cares about: a linked
+// project (someone's real checkout — never editable), a bundled sample
+// (editable by adoption), and a ⌘K-built app (editable outright). Mutable so
+// a harness can grow it the way a real ⌘K build grows the registry.
 const apps = [
   {
     id: 'probe',
@@ -64,8 +64,9 @@ const apps = [
     tile: { kind: 'emoji', image: null, glyph: '🧪', initials: null, hue: null },
     type: 'static',
     status: 'stopped',
-    linked: false,
+    linked: true,
     generated: false,
+    bundled: false,
   },
   {
     id: 'feed-reader',
@@ -76,6 +77,7 @@ const apps = [
     status: 'stopped',
     linked: false,
     generated: false,
+    bundled: true,
   },
   {
     id: 'doodle',
@@ -86,12 +88,13 @@ const apps = [
     status: 'stopped',
     linked: false,
     generated: true,
+    bundled: false,
   },
 ]
 
 // The renderer's subscriptions, so a harness can fire lifecycle events at it
 // the way main does.
-const listeners = { generating: [], generated: [] }
+const listeners = { generating: [], generated: [], changed: [] }
 let generateCalls = []
 
 contextBridge.exposeInMainWorld('reef', {
@@ -186,5 +189,13 @@ contextBridge.exposeInMainWorld('reef', {
   },
   onFixing: () => () => {},
   onEditing: () => () => {},
-  onChanged: () => () => {},
+  onChanged: (cb) => {
+    listeners.changed.push(cb)
+    return () => {}
+  },
+  // Fire the files-changed event the way main does after a watcher hit or a
+  // server-app edit restart, so a harness can assert the frame reloads.
+  __emitChanged: (payload) => {
+    for (const cb of listeners.changed) cb(payload)
+  },
 })

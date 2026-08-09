@@ -64,6 +64,47 @@ export async function readApp(dir) {
   }
 }
 
+// Never worth copying into an adopted app: build artefacts reinstall, VCS
+// history belongs to the original, and .DS_Store belongs to no one.
+const ADOPT_SKIP = new Set(['node_modules', '.git', '.DS_Store'])
+
+/**
+ * Copy a bundled sample into the generated root so the edit chat may own it.
+ *
+ * Adoption is what lets a shipped sample be editable without weakening the
+ * provenance rule: `generated` still derives purely from where the folder
+ * lives, so the sample earns the flag by genuinely moving under reef's roof.
+ * It is a copy, never a move — deleting the adopted folder resurfaces the
+ * pristine bundled original in the next scan (later-wins merge).
+ */
+export async function adoptApp({ srcDir, destRoot, id }) {
+  const dir = path.join(destRoot, id)
+
+  // The generated root owns this name already — a real user's app, possibly
+  // full of their data. Refuse rather than merge or overwrite.
+  try {
+    await fs.access(dir)
+    return { ok: false, error: `${dir} already exists` }
+  } catch {
+    // good: nothing to clobber
+  }
+
+  try {
+    await fs.mkdir(destRoot, { recursive: true })
+    await fs.cp(srcDir, dir, {
+      recursive: true,
+      filter: (source) => !ADOPT_SKIP.has(path.basename(source)),
+    })
+  } catch (err) {
+    // A half-written copy would show up as a broken app forever; a failed
+    // adoption should leave no trace at all.
+    await fs.rm(dir, { recursive: true, force: true })
+    return { ok: false, error: `Could not copy the app: ${err.message}` }
+  }
+
+  return { ok: true, dir }
+}
+
 /**
  * `requireManifest` narrows a scan to folders carrying a `reef.json`.
  *

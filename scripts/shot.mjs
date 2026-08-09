@@ -76,6 +76,17 @@ const STATES = {
       return document.getElementById('palette')?.hidden
     })()`,
   },
+  'clock-edit': {
+    description: 'The bundled clock running with its edit chat open',
+    setup: `(async () => {
+      const clock = [...document.querySelectorAll('.dock-app')].find((b) => b.title === 'Clock')
+      clock?.click()
+      await new Promise((r) => setTimeout(r, 4000))
+      document.querySelector('.window .titlebar button.edit')?.click()
+      await new Promise((r) => setTimeout(r, 600))
+      return document.querySelectorAll('.window .chat').length
+    })()`,
+  },
   settings: {
     description: 'Settings sheet',
     setup: `(async () => {

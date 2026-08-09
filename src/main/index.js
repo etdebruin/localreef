@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url'
 
 import fs from 'node:fs/promises'
 
-import { scanApps, readApp } from '../core/registry.js'
+import { scanApps, readApp, adoptApp } from '../core/registry.js'
 import { createLinkStore } from '../core/links.js'
 import { createSettingsStore, resolveApiKey, DEFAULT_GATEWAY_PORT } from '../core/settings.js'
 import { createSessionStore } from '../core/session.js'
@@ -115,7 +115,13 @@ const editEpoch = new Map()
 const EDIT_HISTORY_LIMIT = 24
 
 async function refreshApps() {
-  const bundled = await scanApps(path.join(projectRoot, 'apps'))
+  // `bundled` marks the samples shipped in this repo. They are editable too —
+  // by adoption: the first edit turn copies the folder into userData/apps,
+  // where the scan below tags it `generated` and shadows the original.
+  const bundled = (await scanApps(path.join(projectRoot, 'apps'))).map((a) => ({
+    ...a,
+    bundled: true,
+  }))
 
   // Apps ⌘K built. The flag derives from where the folder lives — not from
   // anything in the folder — so a copied or linked app can't claim it, and a
@@ -198,6 +204,7 @@ function serialise(record) {
     linked: record.linked ?? false,
     discovered: record.discovered ?? false,
     generated: record.generated ?? false,
+    bundled: record.bundled ?? false,
     name: record.name,
     icon: record.icon,
     tile: tileFor(record),
@@ -618,14 +625,37 @@ ipcMain.handle('apps:fix', async (_event, id) => {
 // and that is acceptable for a repair the user explicitly clicked, but edit
 // turns write on every message — main must refuse folders reef does not own.
 ipcMain.handle('apps:edit', async (_event, { id, message } = {}) => {
-  const record = apps.get(id)
+  let record = apps.get(id)
   if (!record) return { ok: false, error: `No app called "${id}"` }
-  if (!record.generated) return { ok: false, error: 'Only apps built with ⌘K can be edited here.' }
+  if (!record.generated && !record.bundled) {
+    return { ok: false, error: 'Only apps built with ⌘K can be edited here.' }
+  }
   if (!String(message ?? '').trim()) return { ok: false, error: 'Say what to change.' }
   if (editBusy.has(id)) return { ok: false, error: 'Still applying the last change.' }
 
   const apiKey = resolveApiKey(await settings.read())
   if (!apiKey) return { ok: false, error: NO_KEY }
+
+  // A bundled sample is editable by adoption: the first turn copies it into
+  // userData/apps, where provenance makes it `generated` — the shipped
+  // original stays pristine underneath, so deleting the copy is "reset to
+  // stock". This keeps the invariant that the agent only ever writes inside
+  // folders reef owns; linked and discovered apps stay refused above.
+  if (!record.generated) {
+    const adopted = await adoptApp({
+      srcDir: record.dir,
+      destRoot: path.join(app.getPath('userData'), 'apps'),
+      id,
+    })
+    if (!adopted.ok) return adopted
+    await refreshApps()
+    record = apps.get(id)
+    // An open static app is being watched at the bundled path; edits land in
+    // the copy, so the reload trigger has to move with them.
+    if (record.type === 'static' && supervisor.get(id).status === 'ready') {
+      watcher.watch(id, record.dir)
+    }
+  }
 
   editBusy.add(id)
   const epoch = editEpoch.get(id) ?? 0
@@ -656,10 +686,21 @@ ipcMain.handle('apps:edit', async (_event, { id, message } = {}) => {
       )
       // The turn may have renamed the app or changed its icon.
       await refreshApps()
+
+      // The watcher reloads a static app, but a server app keeps running the
+      // old code — without a restart the edit "succeeds" and nothing on
+      // screen changes. Same epoch guard: a window closed mid-turn already
+      // tore its process down, and this must not resurrect it.
+      if (record.type === 'server' && supervisor.get(id).status === 'ready') {
+        await supervisor.stop(id)
+        await supervisor.ensureStarted(apps.get(id))
+        consoleCapture.clear(id)
+        mainWindow?.webContents.send('apps:changed', { id })
+      }
     }
 
-    // No forced reload here: the watcher sees the writes and the frame
-    // reloads through the same path as any other file change.
+    // No forced reload for static apps: the watcher sees the writes and the
+    // frame reloads through the same path as any other file change.
     return result
   } finally {
     editBusy.delete(id)

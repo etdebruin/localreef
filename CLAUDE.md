@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 npm start                  # launch the desktop (Electron)
-npm test                   # 349 unit + integration tests
+npm test                   # 371 unit + integration tests
 npm run lint
 npm run test:electron      # iframe auth, needs a real Electron GUI
 npm run test:electron:ui   # dock/window/settings, edit pane, hello, session restore
@@ -176,7 +176,24 @@ is tagged in `refreshApps()` off the `userData/apps` scan — there is no marker
 file, so a copied folder can't claim it and a linked folder shadowing the same
 id loses it. The edit chat is gated on it in **main** (`apps:edit` refuses),
 not only in the renderer; the fixer's confirm-click covers `linked` and
-`discovered` both.
+`discovered` both. Bundled samples are the one exception, and they earn it by
+**adoption** (`adoptApp` in `registry.js`): the first edit turn copies the
+sample into `userData/apps`, so the flag still derives purely from folder
+location. Deleting the adopted copy resurfaces the pristine original.
+
+**`openWindows` must hold the same object the launch path mutates.** `openApp`
+registers the window before `launch()` resolves, then assigns `win.url` and
+`win.frame` afterwards — storing a spread copy in the map shipped a bug where
+`apps:changed` found no `frame` and every frame reload (watcher hits,
+server-edit restarts) silently did nothing, while the WebSocket's reconnect
+made the stale page look alive. `test/electron/edit-pane.mjs` asserts the
+frame actually re-navigates on the event.
+
+**A server app runs its old code until restarted.** The watcher only covers
+static apps, so a successful edit turn on a `server` app stops and restarts
+its process (same epoch guard as the session append) and re-navigates the
+frame via `apps:changed`. Without it the edit "succeeds" and nothing on
+screen changes.
 
 **Edit conversations are text turns only, capped, in memory.** Tool_use and
 thinking blocks are never replayed across turns; the files on disk are the

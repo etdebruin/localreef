@@ -429,8 +429,16 @@ Notes that matter:
 
 Right-click an app → **Edit**: app running on the left, chat on the right. For static
 apps the gateway watches the folder and pushes a frame reload on change, so edits
-appear in under a second. That tight loop is the thing people will actually keep
-Local Reef open for.
+appear in under a second. Server apps are restarted after each successful turn and
+the frame re-navigated — their process is running the old code until then. That
+tight loop is the thing people will actually keep Local Reef open for.
+
+The bundled samples are editable too, by **adoption**: the first edit turn copies
+the sample into `userData/apps`, where the provenance rule already grants the agent
+write access, and the copy shadows the shipped original in the registry's
+later-wins merge. The original never changes, so deleting the adopted folder is
+"reset to stock" — and the demo story is exactly the pitch: open the clock, ask
+for a change, watch it land. Linked and discovered folders remain off-limits.
 
 ### Intents (v1.5, but design for it now)
 
