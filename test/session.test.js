@@ -10,7 +10,7 @@ async function scratch() {
   return fs.mkdtemp(path.join(os.tmpdir(), 'ld-session-'))
 }
 
-const WIN = { id: 'notes', left: 120, top: 90, width: 800, height: 540, minimized: false }
+const WIN = { id: 'notes', left: 120, top: 90, width: 800, height: 540, minimized: false, maximized: false }
 
 test('createSessionStore', async (t) => {
   await t.test('returns an empty session when there is no file yet', async () => {
@@ -96,8 +96,19 @@ test('createSessionStore', async (t) => {
     })
 
     assert.deepEqual((await store.read()).windows, [
-      { id: 'notes', left: 11, top: 9, width: 800, height: 541, minimized: false },
+      { id: 'notes', left: 11, top: 9, width: 800, height: 541, minimized: false, maximized: false },
     ])
+    await fs.rm(dir, { recursive: true, force: true })
+  })
+
+  // A maximized window keeps its pre-maximize geometry in left/width/etc so
+  // the green bubble can restore it; the flag is what re-fills the desktop.
+  await t.test('round-trips the maximized flag', async () => {
+    const dir = await scratch()
+    const store = createSessionStore(path.join(dir, 'session.json'))
+
+    await store.update({ windows: [{ ...WIN, maximized: true }] })
+    assert.equal((await store.read()).windows[0].maximized, true)
     await fs.rm(dir, { recursive: true, force: true })
   })
 

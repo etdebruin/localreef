@@ -429,6 +429,30 @@
           0 1px 6px rgba(0, 0, 0, 0.3);
       }
 
+      /* Full screen. Class-only so the inline geometry underneath is the
+         restore target — dropping the class returns the window exactly where
+         it was. Fills the canvas (the offset parent); the dock is reachable
+         again the moment you zoom back down or hit the green bubble. */
+      .window.maximized {
+        left: 0 !important;
+        top: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+        border-radius: 0;
+      }
+      .window.maximized .resize { display: none; }
+
+      /* The click-catcher: over the app's frame while the window is unfocused,
+         so the first click in the frame raises the window instead of vanishing
+         into the iframe's document. Gone the instant the window is focused, so
+         it never costs the focused app a single pointer event. */
+      .window .catcher {
+        position: absolute;
+        inset: var(--titlebar) 0 0 0;
+        z-index: 4;
+      }
+      .window.focused .catcher { display: none; }
+
       /* Glass, like everything else now. The titlebar sits over the wallpaper
          rather than over app content, so it can transmit the reef the way the
          dock bubbles do. */
@@ -478,6 +502,10 @@
       /* Blue edits it — only reef-built apps carry this one at all. */
       .titlebar button.edit {
         background: radial-gradient(circle at 34% 28%, #a9c9ff 0%, #5487e0 70%);
+      }
+      /* Green zooms it to full screen, the colour macOS trained everyone on. */
+      .titlebar button.expand {
+        background: radial-gradient(circle at 34% 28%, #a5f0c0 0%, #34c471 70%);
       }
       .titlebar button.minimize {
         background: radial-gradient(circle at 34% 28%, #ffdf9b 0%, #f0a93c 70%);

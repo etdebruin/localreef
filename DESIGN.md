@@ -272,6 +272,15 @@ z-order can't update.** Unfocused windows get a transparent click-catcher; the f
 click focuses and removes it. Costs one click on an unfocused window — which is what
 Windows does anyway, and is acceptable.
 
+**Full screen is a class, not a geometry write.** `.maximized` fills the canvas
+through CSS, so the window's inline `left/top/width/height` stay exactly as they
+were — un-maximizing drops the class and the window is back where it sat, with no
+saved-and-restored bounds to drift. The green titlebar bubble and a double-click on
+the titlebar both toggle it, and it rides in the session like `minimized`. The
+double-click is detected from two quick pointerdowns rather than a `dblclick` event,
+because the titlebar's own drag handler calls `preventDefault` and that suppresses
+the synthesized dblclick.
+
 ### The wallpaper carries the aesthetic, the chrome must not move with it
 
 The canvas takes a full-bleed image. Two rules keep it from fighting the UI:

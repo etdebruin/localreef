@@ -180,6 +180,7 @@ function persistSession() {
         width: parseInt(win.el.style.width, 10),
         height: parseInt(win.el.style.height, 10),
         minimized: win.minimized,
+        maximized: Boolean(win.maximized),
       }))
     window.reef.saveSession(windows)
   }, 300)
@@ -226,6 +227,24 @@ function focusWindow(id) {
   for (const [otherId, other] of openWindows) {
     other.el.classList.toggle('focused', otherId === id)
   }
+  persistSession()
+}
+
+/**
+ * Full screen, and back.
+ *
+ * Class-only: `.maximized` fills the canvas through CSS, so the inline
+ * left/top/width/height are never touched and un-maximizing is just dropping
+ * the class — the window returns to exactly where it was, no geometry to save
+ * and restore. Raise it first, because a maximized window that is not on top
+ * is a confusing full-canvas nothing.
+ */
+function toggleMaximize(id) {
+  const win = openWindows.get(id)
+  if (!win) return
+  focusWindow(id)
+  win.maximized = !win.el.classList.contains('maximized')
+  win.el.classList.toggle('maximized', win.maximized)
   persistSession()
 }
 
@@ -303,6 +322,9 @@ function makeWindow(app, at) {
     titlebar.append(edit)
   }
 
+  const expand = h('button', { className: 'expand', title: 'Full screen', textContent: '⤢' })
+  expand.addEventListener('click', () => toggleMaximize(app.id))
+
   const minimize = h('button', { className: 'minimize', title: 'Minimize', textContent: '–' })
   minimize.addEventListener('click', () => minimizeWindow(app.id))
 
@@ -311,10 +333,35 @@ function makeWindow(app, at) {
   const close = h('button', { className: 'close', title: 'Quit', textContent: '×' })
   close.addEventListener('click', () => closeWindow(app.id))
 
-  titlebar.append(minimize, close)
+  titlebar.append(expand, minimize, close)
+
+  // The other way to full screen, the way every OS trained people to reach
+  // for. Not a `dblclick` listener: the drag handler below calls
+  // preventDefault on pointerdown, which suppresses the browser's synthesized
+  // dblclick outright. So detect it ourselves from two quick pointerdowns on
+  // the titlebar (never on its controls). event.timeStamp, not a clock.
+  let lastTitlebarDown = 0
+  titlebar.addEventListener('pointerdown', (event) => {
+    if (event.button !== 0 || event.target.closest('button, a, input, select, textarea')) return
+    if (event.timeStamp - lastTitlebarDown < 350) {
+      toggleMaximize(app.id)
+      lastTitlebarDown = 0
+      return
+    }
+    lastTitlebarDown = event.timeStamp
+  })
+
+  // A click that lands inside an app's iframe dies in the frame's document and
+  // never reaches this window — so a back window could not be raised by
+  // clicking its content, only its titlebar. This transparent layer sits over
+  // the frame *only while the window is unfocused* (CSS), catches that first
+  // click in the parent document, and focuses the window; once focused it is
+  // display:none, handing the pointer straight back to the app.
+  const catcher = h('div', { className: 'catcher' })
+  catcher.addEventListener('mousedown', () => focusWindow(app.id))
 
   const resize = h('div', { className: 'resize' })
-  const el = h('div', { className: 'window' }, titlebar, body, resize)
+  const el = h('div', { className: 'window' }, titlebar, body, catcher, resize)
 
   // Clamped the same way a drag is, so a session saved on a bigger screen
   // still leaves every titlebar reachable.
@@ -471,7 +518,10 @@ async function openApp(app, at) {
   if (openWindows.has(app.id)) return focusWindow(app.id)
 
   const win = makeWindow(app, at)
-  openWindows.set(app.id, { ...win, app, minimized: false })
+  openWindows.set(app.id, { ...win, app, minimized: false, maximized: Boolean(at?.maximized) })
+  // A session saved full screen comes back full screen; the class is all the
+  // state, the inline geometry underneath is the restore target.
+  if (at?.maximized) win.el.classList.add('maximized')
 
   // After the map entry exists, not inside makeWindow: focusWindow walks
   // openWindows to clear the class off the others, so a window focused before

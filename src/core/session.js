@@ -31,6 +31,8 @@ function normaliseWindow(raw) {
     width: Math.round(raw.width),
     height: Math.round(raw.height),
     minimized: Boolean(raw.minimized),
+    // Geometry above is the *restore* shape; this flag re-fills the desktop.
+    maximized: Boolean(raw.maximized),
   }
 }
 

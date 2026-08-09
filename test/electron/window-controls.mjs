@@ -732,6 +732,150 @@ app.whenReady().then(async () => {
     JSON.stringify(landed),
   )
 
+  // --- clicking a back window's content brings it to the front ---
+  // The window's own mousedown listener never hears a click that lands in the
+  // app's iframe — the event dies inside the frame's document. So clicking the
+  // visible part of a back window did nothing, exactly like a click that
+  // "works" in tests driven by element.click(). Real pointer input only.
+  const dock1 = await centreOf('#dock-apps .dock-app:nth-of-type(1)')
+  const dock2 = await centreOf('#dock-apps .dock-app:nth-of-type(2)')
+  if (dock1) await clickAt(dock1)
+  if (dock2) await clickAt(dock2)
+
+  // Deterministic overlap: A back-left, B in front covering A's right side.
+  await js(`(() => {
+    const wins = [...document.querySelectorAll('.window')]
+    const a = wins.find((w) => w.querySelector('.name').textContent === 'Probe')
+    const b = wins.find((w) => w.querySelector('.name').textContent === 'Feed Reader')
+    Object.assign(a.style, { left: '80px', top: '80px', width: '700px', height: '520px' })
+    Object.assign(b.style, { left: '360px', top: '240px', width: '700px', height: '460px' })
+    return true
+  })()`)
+  await wait(120)
+
+  const nameAt = (x, y) =>
+    js(`document.elementFromPoint(${x}, ${y})?.closest('.window')?.querySelector('.name').textContent ?? null`)
+
+  const beforeRaise = await js(`(() => {
+    const wins = [...document.querySelectorAll('.window')]
+    const of = (name) => wins.find((w) => w.querySelector('.name').textContent === name)
+    return {
+      probeFocused: of('Probe').classList.contains('focused'),
+      feedFocused: of('Feed Reader').classList.contains('focused'),
+    }
+  })()`)
+  check(
+    'the front window holds focus before the click',
+    beforeRaise?.feedFocused === true && beforeRaise.probeFocused === false,
+    JSON.stringify(beforeRaise),
+  )
+
+  // (120, 320) is inside Probe's stage — pure iframe territory — and left of
+  // Feed Reader entirely.
+  await clickAt({ x: 120, y: 320 })
+
+  const afterRaise = await js(`(() => {
+    const wins = [...document.querySelectorAll('.window')]
+    const of = (name) => wins.find((w) => w.querySelector('.name').textContent === name)
+    return {
+      probeFocused: of('Probe').classList.contains('focused'),
+      zProbe: Number(of('Probe').style.zIndex),
+      zFeed: Number(of('Feed Reader').style.zIndex),
+    }
+  })()`)
+  check(
+    'clicking a back window’s content focuses it',
+    afterRaise?.probeFocused === true,
+    JSON.stringify(afterRaise),
+  )
+  check(
+    'and raises it above the old front window',
+    afterRaise && afterRaise.zProbe > afterRaise.zFeed,
+    JSON.stringify(afterRaise),
+  )
+  // The effect a user sees: where the two overlap, Probe now paints on top.
+  const overlapWinner = await nameAt(480, 300)
+  check('the raised window paints over the overlap', overlapWinner === 'Probe', String(overlapWinner))
+
+  // The catcher must not tax the focused window: once Probe is front, its
+  // frame gets the pointer again (the catcher only exists while unfocused).
+  const catcherGone = await js(`(() => {
+    const probe = [...document.querySelectorAll('.window')]
+      .find((w) => w.querySelector('.name').textContent === 'Probe')
+    const r = probe.querySelector('.catcher')?.getBoundingClientRect()
+    return !r || (r.width === 0 && r.height === 0)
+  })()`)
+  check('the focused window’s catcher gets out of the way', catcherGone === true)
+
+  // --- the green bubble fills the desktop, and gives it back ---
+  const beforeMax = await js(`(() => {
+    const w = [...document.querySelectorAll('.window')].find((x) => x.querySelector('.name').textContent === 'Probe')
+    const r = w.getBoundingClientRect()
+    return { left: r.left, top: r.top, width: r.width, height: r.height }
+  })()`)
+
+  const expandPoint = await centreOf('.window.focused .titlebar button.expand')
+  check('a window carries an expand bubble', Boolean(expandPoint))
+  if (expandPoint) await clickAt(expandPoint)
+  await wait(200)
+
+  const maxed = await js(`(() => {
+    const w = [...document.querySelectorAll('.window')].find((x) => x.querySelector('.name').textContent === 'Probe')
+    const r = w.getBoundingClientRect()
+    const canvas = document.getElementById('canvas').getBoundingClientRect()
+    const resize = w.querySelector('.resize')?.getBoundingClientRect()
+    return {
+      fillsWidth: Math.abs(r.width - canvas.width) < 3,
+      fillsHeight: r.height > canvas.height - 40,
+      resizable: Boolean(resize && resize.width > 0),
+    }
+  })()`)
+  check(
+    'expand fills the desktop',
+    maxed?.fillsWidth === true && maxed.fillsHeight === true,
+    JSON.stringify(maxed),
+  )
+  check('a maximized window hides its resize handle', maxed?.resizable === false, JSON.stringify(maxed))
+
+  const expandAgain = await centreOf('.window.focused .titlebar button.expand')
+  if (expandAgain) await clickAt(expandAgain)
+  await wait(200)
+
+  const unmaxed = await js(`(() => {
+    const w = [...document.querySelectorAll('.window')].find((x) => x.querySelector('.name').textContent === 'Probe')
+    const r = w.getBoundingClientRect()
+    return { left: r.left, top: r.top, width: r.width, height: r.height }
+  })()`)
+  check(
+    'a second click gives the old geometry back exactly',
+    unmaxed &&
+      beforeMax &&
+      ['left', 'top', 'width', 'height'].every((k) => Math.abs(unmaxed[k] - beforeMax[k]) < 2),
+    `${JSON.stringify(beforeMax)} -> ${JSON.stringify(unmaxed)}`,
+  )
+
+  // Double-clicking the titlebar is the other way in.
+  const titlebarPoint = await js(`(() => {
+    const w = [...document.querySelectorAll('.window')].find((x) => x.querySelector('.name').textContent === 'Probe')
+    const r = w.querySelector('.titlebar').getBoundingClientRect()
+    return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }
+  })()`)
+  if (titlebarPoint) {
+    // A DOM dblclick only fires after a full two-click sequence — the second
+    // click carrying clickCount:2. One down/up pair never triggers it.
+    win.webContents.sendInputEvent({ type: 'mouseDown', ...titlebarPoint, button: 'left', clickCount: 1 })
+    win.webContents.sendInputEvent({ type: 'mouseUp', ...titlebarPoint, button: 'left', clickCount: 1 })
+    win.webContents.sendInputEvent({ type: 'mouseDown', ...titlebarPoint, button: 'left', clickCount: 2 })
+    win.webContents.sendInputEvent({ type: 'mouseUp', ...titlebarPoint, button: 'left', clickCount: 2 })
+    await wait(250)
+  }
+  const dblMaxed = await js(`(() => {
+    const w = [...document.querySelectorAll('.window')].find((x) => x.querySelector('.name').textContent === 'Probe')
+    const canvas = document.getElementById('canvas').getBoundingClientRect()
+    return Math.abs(w.getBoundingClientRect().width - canvas.width) < 3
+  })()`)
+  check('double-clicking the titlebar maximizes too', dblMaxed === true, `filled=${dblMaxed}`)
+
   const failed = results.filter((r) => !r.passed)
   console.log(`\n${results.length - failed.length}/${results.length} passed`)
   app.exit(failed.length === 0 ? 0 : 1)

@@ -190,6 +190,23 @@ the moment it was parked. Session persistence reads the inline `style.left/top/
 width/height` instead, which survive being hidden.
 `test/electron/session-restore.mjs` guards it.
 
+**A click inside an app iframe never reaches the shell.** The event dies in
+the frame's own (cross-origin) document, so a back window could not be raised
+by clicking its content — only its titlebar. Each window carries a `.catcher`
+overlay that CSS shows *only while the window is unfocused* (`.window.focused
+.catcher { display:none }`); it intercepts that first click in the parent
+document, focuses the window, then vanishes so the focused app pays no pointer
+tax. Assert the effect (which window paints over the overlap, via
+`elementFromPoint`), not the class.
+
+**Full screen is class-only, never inline geometry.** `.window.maximized`
+fills the canvas through CSS `!important`, leaving the inline
+`left/top/width/height` as the untouched restore target — un-maximizing is
+just dropping the class. The green expand bubble and a titlebar double-click
+both toggle it; `maximized` rides in the session like `minimized`. A DOM
+`dblclick` needs a *two-click* `sendInputEvent` sequence (second click
+`clickCount:2`) — a single down/up pair never fires it.
+
 **On macOS, closing the shell window must not shut the shell down.** The red
 dot hides; gateway and supervisor stay up, and the renderer rebuilds the
 desktop from `userData/session.json` on the next window. `window-all-closed`
