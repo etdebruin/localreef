@@ -31,6 +31,7 @@
     "test:electron": "electron test/electron/iframe-auth.mjs",
     "test:electron:ui": "electron test/electron/window-controls.mjs && electron test/electron/edit-pane.mjs && electron test/electron/greeting.mjs && electron test/electron/session-restore.mjs",
     "test:vite": "node test/vite/hmr.mjs",
+    "test:terminal": "node test/terminal/pty.mjs",
     "shot": "node scripts/shot.mjs",
     "test:electron:ws": "electron test/electron/iframe-websocket.mjs",
     "test:electron:media": "electron test/electron/iframe-media.mjs",

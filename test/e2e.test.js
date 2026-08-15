@@ -67,10 +67,12 @@ test('end to end', async (t) => {
     await gateway.close()
   })
 
-  await t.test('both sample apps are discovered and understood', () => {
+  await t.test('all sample apps are discovered and understood', () => {
     assert.equal(apps.get('notes')?.type, 'static')
     assert.equal(apps.get('clock')?.type, 'server')
     assert.equal(apps.get('clock')?.run, 'npm start')
+    assert.equal(apps.get('terminal')?.type, 'server')
+    assert.equal(apps.get('terminal')?.run, 'npm start')
     for (const app of apps.values()) {
       assert.equal(app.error, undefined, `${app.id}: ${app.error}`)
     }

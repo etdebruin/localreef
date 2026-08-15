@@ -76,6 +76,15 @@ const STATES = {
       return document.getElementById('palette')?.hidden
     })()`,
   },
+  terminal: {
+    description: 'The bundled terminal running a live shell',
+    setup: `(async () => {
+      const term = [...document.querySelectorAll('.dock-app')].find((b) => b.title === 'Terminal')
+      term?.click()
+      await new Promise((r) => setTimeout(r, 6000))
+      return document.querySelectorAll('.window').length
+    })()`,
+  },
   'clock-edit': {
     description: 'The bundled clock running with its edit chat open',
     setup: `(async () => {

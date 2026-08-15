@@ -22,12 +22,13 @@ npm run build:mac   # → dist/Local Reef-darwin-arm64/Local Reef.app
 Drag the `.app` to `/Applications` and keep it in your Dock. The build is
 unsigned, so macOS will quarantine a copy that arrives from anywhere else.
 
-Two sample apps ship in `apps/`:
+Three sample apps ship in `apps/`:
 
 | App | Type | Proves |
 |---|---|---|
 | **Notes** | static | serves instantly off disk, no process at all; `localStorage` persists per app origin |
 | **Clock** | node server | spawned on click, proxied through the gateway, live **WebSocket** frames |
+| **Terminal** | node server | a real shell (node-pty + xterm.js): interactive input and binary frames through the gateway; installs its own dependencies on first launch |
 
 ---
 

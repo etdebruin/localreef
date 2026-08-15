@@ -15,6 +15,7 @@ npm run test:electron:media # mic/camera Permissions Policy on an app iframe
 npm run test:electron:console # app-frame errors reach main, attributed per app
 npm run test:electron:storage # app localStorage survives a real relaunch
 npm run test:vite          # real Vite through the gateway, incl. live HMR
+npm run test:terminal      # real shell over node-pty through the gateway; installs node-pty on first run
 npm run shot               # screenshot the running app into .shots/
 npm run install:mac        # rebuild Local Reef.app into /Applications, if stale
 ```
@@ -318,3 +319,9 @@ Three sources, merged in `refreshApps()`:
 Linked folders are read where they live; nothing is copied. `apps/notes` is the
 static sample, `apps/clock` the server sample — it hand-rolls a WebSocket
 specifically so the proxy and upgrade relay are provable with no `npm install`.
+`apps/terminal` is the dependency-bearing sample: a real shell over node-pty,
+xterm.js served out of its own `node_modules`. It binds before its deps exist
+(an "installing…" page holds the readiness probe happy while `npm install`
+runs on first launch) and restores the exec bit npm strips from node-pty's
+`spawn-helper` — without that, every `pty.spawn` on macOS dies with
+`posix_spawnp failed`. `test/terminal/pty.mjs` guards the whole path.
