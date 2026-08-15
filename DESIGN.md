@@ -35,6 +35,25 @@ having to know or care.
 runtime-weight argument is moot. Electron's session/preload/protocol handling and
 process supervision story is mature. We care about experience, not megabytes.
 
+That was the judgment call at the start; building the thing turned it into an
+empirical one. The machinery the product now rests on is Chromium-specific, and
+most of it has no WKWebView equivalent at all: `host-resolver-rules` is what makes
+`*.reef.localhost` resolve without trusting the system resolver — the whole
+identity-not-URL scheme sits on it; `webRequest.onBeforeSendHeaders` injects auth
+per-origin *including on WebSocket handshakes*; per-app origins buy storage
+partitioning and secure-context APIs because Chromium treats `.localhost` as
+trustworthy; Permissions Policy on cross-origin iframes is how mic/camera grants
+work; per-frame `console-message` attribution feeds the fixer's evidence; and the
+screenshot harness is Chrome DevTools Protocol. Each of those is a documented trap
+with its own guard test — a migration would mean rediscovering that list on an
+engine where several entries have no answer.
+
+So the shell is, fairly literally, a multi-origin Chromium with opinions — the one
+product category where shipping a browser is the point rather than the overhead.
+Reconsider only if the shell ever goes thin (gateway as a daemon, apps in the
+user's real browser — a different product, not a port) or if a WKWebView-based
+stack grows request interception and resolver control on macOS.
+
 **Why iframes over `WebContentsView`.** `WebContentsView` gives stronger isolation
 but composites *above* the renderer's DOM within its rect — which means fighting it
 for drop shadows, overlapping z-order, and minimize animations. The canvas *is* the
