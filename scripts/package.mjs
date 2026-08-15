@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url'
 export const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
 /** Everything the packaged app is built from — what install:mac watches. */
-export const SOURCES = ['src', 'apps', 'package.json', 'build/icon.icns']
+export const SOURCES = ['src', 'apps', 'assets', 'package.json', 'build/icon.icns']
 
 /** Returns the path to the built Local Reef.app. */
 export async function buildApp() {
